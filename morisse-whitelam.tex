@@ -90,14 +90,11 @@ so that (\ref{eq:langevin}) defines a relaxation toward a thermodynamic equilibr
 p_{\bm{\theta}}(\mathbf{x}) \propto \exp\!\left[-\beta U(\mathbf{x};\bm{\theta})\right].
 \end{equation}
 
-We emphasize the analogy with recurrent neural networks (RNNs): the mapping
-\[
-f(\mathbf{x}) \;\longleftrightarrow\; \text{hidden-state update in a continuous-time RNN},
-\]
-and
-\[
-U(\mathbf{x}) \;\longleftrightarrow\; \text{energy function of an energy-based model}.
-\]
+We emphasize the analogy with recurrent neural networks (RNNs):
+\begin{align*}
+f(\mathbf{x}) &\;\longleftrightarrow\; \text{hidden-state update in a continuous-time RNN}, \\
+U(\mathbf{x}) &\;\longleftrightarrow\; \text{energy function of an energy-based model}.
+\end{align*}
 Neural networks are programmable oscillators; training shapes their attractor geometry.
 Our architecture treats these structures as \emph{physical}, not virtual.
 
