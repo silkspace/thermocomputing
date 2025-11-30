@@ -55,10 +55,16 @@ The Onsager-Machlup action functional measures how well model parameters explain
 Temperature acts as a Lagrangian multiplier, and forward-backward symmetry (detailed balance) provides additional constraints.
 This perspective explains why trajectory-based learning converges rapidly---in 10--20 epochs rather than thousands---because projecting onto a constraint surface is geometrically simpler than searching a high-dimensional loss landscape.
 
-Our system treats the thermodynamic array as a continuous-time recurrent neural network, provides a measurement plane for sampling trajectories, implements gradient estimators based on local correlators, and reconfigures couplings using a dual-bank analog front-end.
-Learning emerges from the relaxation dynamics themselves, not from numerical backpropagation.
+\textbf{Contributions.}
+(i) A finite-time trajectory likelihood objective for thermodynamic arrays that yields closed-form gradients from local statistics.
+(ii) Gradient estimators for biases $b_i$ and couplings $J_{ij}$ requiring only local state increments and neighbor values---suitable for on-chip implementation.
+(iii) A full-chip blueprint with measurement plane, local statistics layer, gradient engine, and dual-bank reconfiguration fabric.
+(iv) Initial empirical validation on synthetic parameter recovery and MNIST reconstruction, demonstrating rapid convergence.
+
+Section~\ref{sec:model} introduces the physical model; Section~\ref{sec:architecture} describes the processor architecture; Section~\ref{sec:learning} derives the local gradient estimators; Section~\ref{sec:constraint} interprets learning as constraint satisfaction via the Onsager-Machlup action; Section~\ref{sec:hardware} maps the architecture to CMOS.
 
 \section{Physical Model}
+\label{sec:model}
 
 The system consists of $N$ interacting stochastic units (nodes) whose state variables are denoted $x_i(t)$. 
 Depending on implementation, $x_i$ may represent:
@@ -95,7 +101,15 @@ U(\mathbf{x}) \;\longleftrightarrow\; \text{energy function of an energy-based m
 Neural networks are programmable oscillators; training shapes their attractor geometry.
 Our architecture treats these structures as \emph{physical}, not virtual.
 
+\textbf{Modeling regimes.}
+The dynamics (\ref{eq:langevin}) are written in continuous state space $x_i \in \mathbb{R}$.
+When the potential $U$ has multiple wells (e.g., the $\varphi^4$ form with $J_2 < 0$), $x_i$ fluctuates around discrete attractors, and the system can be coarse-grained to an effective binary model with $s_i \in \{-1,+1\}$.
+CMOS p-bits operate in this regime: the cross-coupled inverters create a double-well potential, and thermal fluctuations drive transitions.
+The learning framework applies in both limits---continuous Langevin for analog circuits, effective Glauber dynamics for digital p-bits---with the same local gradient estimators.
+We do not require the drift $f$ to derive from a potential; the gradient case is a special instance where detailed balance holds.
+
 \section{Processor Architecture}
+\label{sec:architecture}
 
 The Criticality Engine realizes learning through a closed loop: physical dynamics generate trajectories, measurements extract statistics, and parameter updates reshape the energy landscape.
 Figure~\ref{fig:architecture} shows the five integrated subsystems and their data flow.
@@ -201,6 +215,15 @@ A complete learning cycle proceeds as follows:
 
 The entire cycle can complete in microseconds, limited primarily by the relaxation time of the T-array.
 With MHz-scale p-bit dynamics, this enables thousands of parameter updates per second---true online learning in hardware.
+
+\textbf{What is computed where.}
+\begin{itemize}
+\item \emph{T-array nodes:} Store current state $x_i$, receive bias $b_i$ and neighbor currents $\sum_j J_{ij} x_j$.
+\item \emph{Measurement Plane:} Samples and holds $x_i(t_k)$ at discrete times; stores local register for $\Delta x_i^k$.
+\item \emph{Local Statistics:} Computes $\langle x_i \rangle$, $\langle x_i x_j \rangle$, and velocity residuals $\delta_i^k = \Delta x_i^k - \text{predicted}$.
+\item \emph{Gradient Engine:} Accumulates $\Delta b_i \propto \sum_k \delta_i^k$ and $\Delta J_{ij} \propto \sum_k \delta_i^k x_j^k$.
+\item \emph{DAC banks:} Store $\{b_i\}$ and $\{J_{ij}\}$; dual-bank allows atomic swap.
+\end{itemize}
 
 \section{Finite-Time Learning Objectives and Gradient Estimation}
 \label{sec:learning_rules}
@@ -362,7 +385,7 @@ This reveals why operating near criticality is advantageous: critical fluctuatio
 
 \subsection{Forward-Backward Symmetry and Detailed Balance}
 
-A crucial feature of potential-driven dynamics is that forward and backward trajectory likelihoods are related by detailed balance.
+Under the potential-driven surrogate model, forward and backward trajectory likelihoods are related by detailed balance.
 For any trajectory $\mathbf{x}(t)$ from $\mathbf{x}_0$ to $\mathbf{x}_T$, the time-reversed trajectory $\tilde{\mathbf{x}}(t) = \mathbf{x}(T-t)$ has action
 \begin{equation}
 S[\tilde{\mathbf{x}}] = S[\mathbf{x}] + \frac{V(\mathbf{x}_T) - V(\mathbf{x}_0)}{k_{\rm B}T}.
@@ -373,8 +396,9 @@ At equilibrium, where starting and ending configurations are drawn from the same
 \langle S_{\rm forward} \rangle = \langle S_{\rm backward} \rangle.
 \end{equation}
 
-This symmetry provides an additional constraint: \emph{any asymmetry between forward and backward action indicates incorrect parameters.}
-The learning rule (\ref{eq:velocity_matching}) can be understood as enforcing this symmetry---adjusting parameters until forward and backward paths are equally likely.
+We use the backward-direction objective as an estimation constraint, not as an assumption that the underlying device obeys detailed balance.
+In the potential-driven limit, this construction coincides with the usual reversible setting; outside that limit it remains a useful surrogate learning signal and diagnostic residual.
+Any asymmetry between forward and backward action suggests the model is incomplete---either the learned parameters are wrong, or the drift has solenoidal components not captured by the gradient ansatz.
 
 \subsection{Why Learning is Fast: Constraint Satisfaction vs. Search}
 
@@ -416,6 +440,7 @@ The constraint-satisfaction view has direct hardware implications:
 \end{itemize}
 
 \section{Hardware Realization}
+\label{sec:hardware}
 
 The Criticality Engine requires no exotic materials or fabrication processes.
 Every component can be built from standard CMOS primitives available in any modern foundry.
@@ -578,8 +603,8 @@ Coupling DACs & 10,000 & $\sim$20 & 200K \\
 
 \textbf{vs.\ GPUs/TPUs.}
 Graphics processors simulate neural networks digitally, consuming $\sim$100--400W for training.
-The Criticality Engine implements the same dynamics physically, with estimated power in the mW--W range (dominated by DAC and ADC power, not computation).
-The speedup comes from eliminating the simulation overhead: physics computes the Langevin update in one physical timestep, not thousands of floating-point operations.
+A back-of-envelope estimate suggests the Criticality Engine could operate in the mW--W range (dominated by DAC and ADC power, not computation), though detailed power analysis awaits fabrication.
+The potential speedup comes from eliminating simulation overhead: physics computes the Langevin update in one physical timestep, not thousands of floating-point operations.
 
 \textbf{vs.\ neuromorphic chips} (Intel Loihi, IBM TrueNorth).
 These implement spiking neural networks with digital neurons and deterministic dynamics.
@@ -648,7 +673,7 @@ We have presented the Criticality Engine, the first end-to-end architecture for 
 The central theoretical contribution is the reframing of learning as \emph{constraint satisfaction} rather than optimization.
 The Onsager-Machlup action $S[\mathbf{x}(t)]$ defines a constraint surface: correct parameters minimize the action to its thermal floor, making observed trajectories maximally likely while competing paths are exponentially suppressed.
 Temperature acts as a Lagrangian multiplier controlling constraint tightness, while forward-backward symmetry (detailed balance) provides additional constraints that accelerate convergence.
-This explains the empirically observed rapid learning---99\% parameter recovery in 10--20 epochs---because projecting onto a constraint surface is geometrically simpler than searching a high-dimensional loss landscape.
+This perspective suggests why trajectory-based learning converges rapidly---99\% parameter recovery in 10--20 epochs in our experiments---because projecting onto a constraint surface is geometrically simpler than searching a high-dimensional loss landscape.
 
 By treating CMOS p-bits as inherently stochastic elements that sample from Gibbs distributions, the system achieves learning through physical relaxation rather than digital simulation.
 The local structure of the action---a sum of terms each depending only on neighboring states and velocities---enables on-chip gradient computation without global communication.
@@ -704,38 +729,38 @@ This is actually an advantage: explicit conditioning gives direct control over w
 RBMs cannot easily target a specific class without modification.
 
 \subsection{Class-Conditional Potentials Restore Generation}
-The solution is \emph{class-conditional biases}: for each class $k \in \{0,\ldots,9\}$, we learn a separate bias vector $\mathbf{b}_k$, giving
+The solution is \emph{class-conditional biases}: for each class $c \in \{0,\ldots,9\}$, we learn a separate bias vector $\mathbf{b}_c$, giving
 \begin{equation}
-\partial_i V_k(\mathbf{x}) = 2J_2 x_i + 4J_4 x_i^3 + b_{k,i} + \sum_{j} J_{ij} x_j.
+\partial_i V_c(\mathbf{x}) = 2J_2 x_i + 4J_4 x_i^3 + b_{c,i} + \sum_{j} J_{ij} x_j.
 \end{equation}
-The couplings $J_{ij}$ remain shared across classes (encoding common structure like edges and correlations), while each $\mathbf{b}_k$ creates a class-specific constraint surface $\mathcal{C}_k$.
+The couplings $J_{ij}$ remain shared across classes (encoding common structure like edges and correlations), while each $\mathbf{b}_c$ creates a class-specific constraint surface $\mathcal{C}_c$.
 
-From the path integral view: training with class-$k$ trajectories projects $\mathbf{b}_k$ onto the surface where those trajectories have $\exp(-S_k) \to 1$.
+From the path integral view: training with class-$c$ trajectories projects $\mathbf{b}_c$ onto the surface where those trajectories have $\exp(-S_c) \to 1$.
 Each class has its own constraint surface, and the biases are learned independently via the trajectory action.
 
-\textbf{Attractor visualization:} Starting from uniform gray ($x_i = 0$) and evolving under $V_k$, pixels organize into the pattern for digit $k$.
-The learned biases $\mathbf{b}_k$ resemble digit templates---analogous to Hopfield stored patterns---and conditional generation produces recognizable digits.
+\textbf{Attractor visualization:} Starting from uniform gray ($x_i = 0$) and evolving under $V_c$, pixels organize into the pattern for digit $k$.
+The learned biases $\mathbf{b}_c$ resemble digit templates---analogous to Hopfield stored patterns---and conditional generation produces recognizable digits.
 The fast convergence demonstrated in Figure~\ref{fig:trajectory} applies equally when starting from gray: structure emerges in $\sim$10 steps and stabilizes by $\sim$20 steps.
 
 \textbf{Wrong-label test:} Denoising a digit with an incorrect class label reshapes it toward the wrong class, confirming that labels act as latent mode selectors that activate distinct attractor basins.
 
 \subsection{Recognition and the Complete Pipeline}
 
-A key question arises: how does the system know which bias $\mathbf{b}_k$ to load for an unknown input?
+A key question arises: how does the system know which bias $\mathbf{b}_c$ to load for an unknown input?
 The answer is that the learned potentials themselves provide classification.
 
 \textbf{Energy-based recognition.}
 Given input $\mathbf{x}$, evaluate the energy (or gradient magnitude) under each class potential:
 \begin{equation}
-k^* = \arg\min_k V_k(\mathbf{x}) \quad \text{or equivalently} \quad k^* = \arg\min_k \|\nabla V_k(\mathbf{x})\|^2.
+k^* = \arg\min_k V_c(\mathbf{x}) \quad \text{or equivalently} \quad k^* = \arg\min_k \|\nabla V_c(\mathbf{x})\|^2.
 \end{equation}
 The class with lowest energy (or smallest gradient, indicating proximity to equilibrium) is selected.
-This is precisely \emph{Hopfield associative memory}: the biases $\mathbf{b}_k$ act as stored patterns, and recognition finds the nearest attractor.
+This is precisely \emph{Hopfield associative memory}: the biases $\mathbf{b}_c$ act as stored patterns, and recognition finds the nearest attractor.
 
 \textbf{Complete inference pipeline:}
 \begin{enumerate}
 \item \textbf{Input}: Present noisy or partial pattern $\mathbf{x}$ to the T-array.
-\item \textbf{Recognize}: Evaluate $V_k(\mathbf{x})$ for all $k$ (parallelizable across bias banks). Select $k^* = \arg\min_k V_k(\mathbf{x})$.
+\item \textbf{Recognize}: Evaluate $V_c(\mathbf{x})$ for all $k$ (parallelizable across bias banks). Select $k^* = \arg\min_k V_c(\mathbf{x})$.
 \item \textbf{Load}: Reconfiguration fabric loads bias bank $\mathbf{b}_{k^*}$.
 \item \textbf{Relax}: System evolves under $V_{k^*}$; output converges to clean reconstruction.
 \end{enumerate}
@@ -748,81 +773,81 @@ This occurs because score matching optimizes \emph{within-class} reconstruction,
 
 \subsection{Contrastive Learning: Separating Constraint Surfaces}
 
-The trajectory action (Section~\ref{sec:constraint}) learns each $\mathbf{b}_k$ by projecting onto the constraint surface $\mathcal{C}_k$ where class-$k$ trajectories are maximally likely.
+The trajectory action (Section~\ref{sec:constraint}) learns each $\mathbf{b}_c$ by projecting onto the constraint surface $\mathcal{C}_c$ where class-$c$ trajectories are maximally likely.
 But this is a \emph{generative} objective---it doesn't ensure that constraint surfaces for different classes are well-separated.
 For robust classification, we need a \emph{discriminative} term that pushes constraint surfaces apart.
 
 The contrastive loss explicitly separates class energies:
 \begin{equation}
-L_{\rm contrastive} = \sum_k \left[ V_k(\mathbf{x}_k) - \frac{1}{K-1}\sum_{j \neq k} V_j(\mathbf{x}_k) \right],
+L_{\rm contrastive} = \sum_k \left[ V_c(\mathbf{x}_c) - \frac{1}{K-1}\sum_{j \neq k} V_j(\mathbf{x}_c) \right],
 \label{eq:contrastive}
 \end{equation}
-where $\mathbf{x}_k$ denotes a sample from class $k$. This pushes the correct class energy $V_k(\mathbf{x}_k)$ down while pushing incorrect class energies $V_j(\mathbf{x}_k)$ up.
+where $\mathbf{x}_c$ denotes a sample from class $c$. This pushes the correct class energy $V_c(\mathbf{x}_c)$ down while pushing incorrect class energies $V_j(\mathbf{x}_c)$ up.
 
 \textbf{Learning rules from contrastive loss.}
-Consider our potential with shared couplings $J_{ij}$ and class-specific biases $\mathbf{b}_k$:
+Consider our potential with shared couplings $J_{ij}$ and class-specific biases $\mathbf{b}_c$:
 \begin{equation}
-V_k(\mathbf{x}) = J_2 \|\mathbf{x}\|^2 + J_4 \|\mathbf{x}\|^4_4 + \mathbf{b}_k \cdot \mathbf{x} + \tfrac{1}{2}\mathbf{x}^\top J \mathbf{x}.
+V_c(\mathbf{x}) = J_2 \|\mathbf{x}\|^2 + J_4 \|\mathbf{x}\|^4_4 + \mathbf{b}_c \cdot \mathbf{x} + \tfrac{1}{2}\mathbf{x}^\top J \mathbf{x}.
 \end{equation}
 Computing gradients of (\ref{eq:contrastive}):
 
-\emph{For shared couplings $J_{ij}$}: Since $\partial V_k / \partial J_{ij} = x_i x_j$ is independent of $k$, we have
+\emph{For shared couplings $J_{ij}$}: Since $\partial V_c / \partial J_{ij} = x_i x_j$ is independent of $k$, we have
 \begin{equation}
-\frac{\partial L_{\rm contrastive}}{\partial J_{ij}} = \sum_k \left[ x_{k,i} x_{k,j} - \frac{K-1}{K-1} x_{k,i} x_{k,j} \right] = 0.
+\frac{\partial L_{\rm contrastive}}{\partial J_{ij}} = \sum_k \left[ x_{c,i} x_{k,j} - \frac{K-1}{K-1} x_{c,i} x_{k,j} \right] = 0.
 \end{equation}
 The contrastive loss \emph{does not affect} the shared couplings---the positive and negative terms cancel exactly.
 
-\emph{For class biases $\mathbf{b}_k$}: Since $\partial V_k / \partial b_{k,i} = x_i$ and $b_k$ only appears in $V_k$:
+\emph{For class biases $\mathbf{b}_c$}: Since $\partial V_c / \partial b_{c,i} = x_i$ and $b_c$ only appears in $V_c$:
 \begin{align}
-\frac{\partial L_{\rm contrastive}}{\partial b_{k,i}} &= x_{k,i}, \label{eq:hebb_pos}\\
-\frac{\partial L_{\rm contrastive}}{\partial b_{j,i}} &= -\frac{x_{k,i}}{K-1} \quad (j \neq k). \label{eq:hebb_neg}
+\frac{\partial L_{\rm contrastive}}{\partial b_{c,i}} &= x_{c,i}, \label{eq:hebb_pos}\\
+\frac{\partial L_{\rm contrastive}}{\partial b_{j,i}} &= -\frac{x_{c,i}}{K-1} \quad (j \neq k). \label{eq:hebb_neg}
 \end{align}
 This yields a \textbf{Hebbian/anti-Hebbian learning rule}:
 \begin{align}
-\Delta b_{k,i} &\propto -x_{k,i} \quad \text{(pull correct class toward data)}, \\
-\Delta b_{j,i} &\propto +\frac{x_{k,i}}{K-1} \quad \text{(push incorrect classes away)}.
+\Delta b_{c,i} &\propto -x_{c,i} \quad \text{(pull correct class toward data)}, \\
+\Delta b_{j,i} &\propto +\frac{x_{c,i}}{K-1} \quad \text{(push incorrect classes away)}.
 \end{align}
-Geometrically: the correct-class constraint surface $\mathcal{C}_k$ is pulled toward the data point, while incorrect-class surfaces $\mathcal{C}_{j\neq k}$ are pushed away.
+Geometrically: the correct-class constraint surface $\mathcal{C}_c$ is pulled toward the data point, while incorrect-class surfaces $\mathcal{C}_{j\neq k}$ are pushed away.
 This is analogous to Hopfield learning with explicit negative examples, or the positive/negative phase of contrastive divergence.
 
 \textbf{Key insight:} The shared couplings $J_{ij}$ are invariant under contrastive learning (the positive and negative terms cancel).
-Only the class-specific biases $\mathbf{b}_k$ change.
-This means trajectory action learning (for $J_{ij}$) and contrastive learning (for $\mathbf{b}_k$) can be combined: the former learns shared structure, the latter learns discriminative boundaries.
+Only the class-specific biases $\mathbf{b}_c$ change.
+This means trajectory action learning (for $J_{ij}$) and contrastive learning (for $\mathbf{b}_c$) can be combined: the former learns shared structure, the latter learns discriminative boundaries.
 
 \textbf{Detailed balance in class space.}
 While Langevin dynamics provides detailed balance in \emph{configuration space} $\mathbf{x}$:
 \begin{equation}
-d\mathbf{x} = -\nabla V_k \, dt + \sqrt{2k_{\rm B}T}\, d\mathbf{W}, \quad p(\mathbf{x}|k) \propto e^{-V_k(\mathbf{x})/k_{\rm B}T},
+d\mathbf{x} = -\nabla V_c \, dt + \sqrt{2k_{\rm B}T}\, d\mathbf{W}, \quad p(\mathbf{x}|k) \propto e^{-V_c(\mathbf{x})/k_{\rm B}T},
 \end{equation}
 the contrastive objective provides detailed balance in \emph{class space}. Define
 \begin{equation}
-p(k|\mathbf{x}) = \frac{\exp(-V_k(\mathbf{x})/T)}{\sum_j \exp(-V_j(\mathbf{x})/T)},
+p(k|\mathbf{x}) = \frac{\exp(-V_c(\mathbf{x})/T)}{\sum_j \exp(-V_j(\mathbf{x})/T)},
 \label{eq:class_softmax}
 \end{equation}
-a Boltzmann distribution over discrete class labels. At low temperature $T \to 0$, this concentrates on $k^* = \arg\min_k V_k(\mathbf{x})$. The contrastive loss ensures this ``classification dynamics'' has the correct fixed point: data from class $k$ should flow to class $k$.
+a Boltzmann distribution over discrete class labels. At low temperature $T \to 0$, this concentrates on $k^* = \arg\min_k V_c(\mathbf{x})$. The contrastive loss ensures this ``classification dynamics'' has the correct fixed point: data from class $c$ should flow to class $c$.
 
 \textbf{Joint distribution and RBM connection.}
 The class-conditional structure reveals a connection to Restricted Boltzmann Machines. Consider the joint distribution
 \begin{equation}
-p(\mathbf{x}, k) \propto \exp\left(-V_k(\mathbf{x})/k_{\rm B}T\right).
+p(\mathbf{x}, k) \propto \exp\left(-V_c(\mathbf{x})/k_{\rm B}T\right).
 \label{eq:joint}
 \end{equation}
 This treats $k$ as a \emph{one-hot hidden unit}---analogous to an RBM where the hidden layer has exactly one active unit selecting among $K$ energy functions. The marginal over $\mathbf{x}$ is
 \begin{equation}
-p(\mathbf{x}) = \sum_k p(\mathbf{x},k) \propto \sum_k \exp(-V_k(\mathbf{x})/k_{\rm B}T),
+p(\mathbf{x}) = \sum_k p(\mathbf{x},k) \propto \sum_k \exp(-V_c(\mathbf{x})/k_{\rm B}T),
 \end{equation}
 creating an implicit mixture model without requiring explicit hidden-unit sampling during training.
 
 \textbf{Alternating dynamics.}
 The joint distribution (\ref{eq:joint}) suggests an alternating inference procedure satisfying detailed balance:
 \begin{enumerate}
-\item \emph{Langevin step in $\mathbf{x}$}: Given class $k$, evolve $\mathbf{x}$ under $-\nabla V_k$.
+\item \emph{Langevin step in $\mathbf{x}$}: Given class $c$, evolve $\mathbf{x}$ under $-\nabla V_c$.
 \item \emph{Gibbs step in $k$}: Given $\mathbf{x}$, resample $k \sim p(k|\mathbf{x})$ via (\ref{eq:class_softmax}).
 \end{enumerate}
 This provides a principled way to jointly sample configurations and class labels, unifying generation and classification in a single thermodynamic framework.
 
-The learned class biases $-\mathbf{b}_k$ function as attractor templates analogous to Hopfield stored patterns, resembling smoothed digit templates where positive (negative) bias values attract pixels toward white (black).
-The contrastive signal $-b_k + \frac{1}{K-1}\sum_{j\neq k} b_j$ reveals what makes each digit \emph{unique}---the discriminative features that separate it from other classes.
+The learned class biases $-\mathbf{b}_c$ function as attractor templates analogous to Hopfield stored patterns, resembling smoothed digit templates where positive (negative) bias values attract pixels toward white (black).
+The contrastive signal $-b_c + \frac{1}{K-1}\sum_{j\neq k} b_j$ reveals what makes each digit \emph{unique}---the discriminative features that separate it from other classes.
 
 For now, the system excels at \emph{conditional} tasks (generation and denoising given the class label) rather than pure \emph{recognition}; contrastive fine-tuning to improve classification accuracy remains future work.
 
