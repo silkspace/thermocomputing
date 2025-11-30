@@ -237,13 +237,12 @@ $\Delta\mathbf{x}^k$.
 Our learning objective at observation times $\{t_k\}$ is the negative log-likelihood
 of these observed forward steps,
 \begin{equation}
-L(\bm{\theta}) = -\sum_{k} w_k
+L(\bm{\theta}) = -\sum_{k}
 \ln \tilde P_{\bm{\theta}}^{\rm step}\!\left(\Delta\mathbf{x}^k\mid\mathbf{x}^k\right),
 \label{eq:finite_time_loss}
 \end{equation}
-where $\Delta\mathbf{x}^k = \mathbf{x}^{k+1}-\mathbf{x}^{k}$ is the displacement over
-step $k$ and $w_k$ are user-chosen weights.  Because the drift derives from a
-potential, detailed balance holds; forward and time-reversed trajectory
+where $\Delta\mathbf{x}^k = \mathbf{x}^{k+1}-\mathbf{x}^{k}$ is the displacement over step $k$.
+Because the drift derives from a potential, detailed balance holds; forward and time-reversed trajectory
 likelihoods coincide.  As a result, minimising (\ref{eq:finite_time_loss}) using
 forward trajectories also maximises the likelihood of the most probable
 backward (reconstructive) trajectories.
