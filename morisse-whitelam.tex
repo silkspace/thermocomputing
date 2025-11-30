@@ -28,7 +28,7 @@ Stephen Whitelam\footnote{Email: whitelam@lbl.gov}
 
 \begin{abstract}
 We introduce the \emph{Criticality Engine}, a computational architecture that performs both inference and online learning by exploiting the intrinsic stochastic dynamics of thermodynamic systems.
-The key theoretical insight is that learning in such systems is \emph{constraint satisfaction}, not optimization: the Onsager-Machlup action $S[\mathbf{x}(t)] = \int (\dot{\mathbf{x}} + \nabla V)^2 dt / 4\mu k_{\rm B}T$ defines a constraint surface where $\exp(-S) \to 1$ for correctly-parameterized dynamics.
+The key theoretical insight is that learning in such systems is \emph{constraint satisfaction}, not optimization: the Onsager-Machlup action $S[\mathbf{x}(t)] = \int (\dot{\mathbf{x}} + \nabla V)^2 dt / 4\mu k_{\rm B}T$ measures trajectory likelihood, and as noise decreases, probability concentrates on least-action paths while competing trajectories are exponentially suppressed.
 Temperature acts as a Lagrangian multiplier controlling constraint tightness, and forward-backward trajectory symmetry (detailed balance) provides additional constraints that accelerate convergence.
 This perspective explains why trajectory-based learning is fast: we demonstrate $>$99\% parameter recovery in 10--20 epochs, compared to thousands of epochs typical in conventional neural network training.
 CMOS p-bits biased at threshold naturally implement these dynamics in hardware, and the learning rules decompose into local operations suitable for on-chip gradient estimation.
@@ -50,7 +50,7 @@ In this work we propose the \emph{Criticality Engine}, an architecture designed 
 The key insight is twofold.
 First, CMOS p-bits biased at threshold are inherently critical: the probability $p(s_i=1) = \sigma(h_i)$ realizes Gibbs sampling in physics, not simulation.
 Second, and more fundamentally, learning in such systems is \emph{constraint satisfaction}, not optimization.
-The Onsager-Machlup action functional measures how well model parameters explain observed trajectories; when $\exp(-S) \to 1$, the observed dynamics are maximally likely under the model.
+The Onsager-Machlup action functional measures how well model parameters explain observed trajectories; correct parameters minimize the action, making observed dynamics maximally likely relative to competing paths.
 Temperature acts as a Lagrangian multiplier, and forward-backward symmetry (detailed balance) provides additional constraints.
 This perspective explains why trajectory-based learning converges rapidly---in 10--20 epochs rather than thousands---because projecting onto a constraint surface is geometrically simpler than searching a high-dimensional loss landscape.
 
@@ -150,6 +150,15 @@ C_{ij}(t_k) = \frac{1}{R}\sum_{r=1}^R x_i^{(r)}(t_k) x_j^{(r)}(t_k).
 These are \emph{sufficient statistics} for gradient estimation: the mean $m_i$ enters the bias gradient, and the correlation $C_{ij}$ enters the coupling gradient.
 Because each correlator operates on a local neighborhood, the computation is embarrassingly parallel and scales linearly with node count.
 
+\textbf{What is stored locally.}
+Each node $i$ maintains only:
+(1) its current state $x_i(t_k)$,
+(2) the displacement $\Delta x_i^k = x_i(t_{k+1}) - x_i(t_k)$, and
+(3) states of its neighbors $\{x_j : j \in \mathcal{N}(i)\}$.
+The gradient for bias $b_i$ is a function of $(x_i, \Delta x_i)$ alone.
+The gradient for coupling $J_{ij}$ is a product of quantities at nodes $i$ and $j$---no global communication required.
+This locality is the key to scalability: a 1000-node array computes 1000 bias gradients and $\sim$10,000 coupling gradients (for degree-10 connectivity) entirely in parallel.
+
 \subsection{Gradient Engine}
 
 A lightweight digital core---as simple as a vector microcontroller---reads the statistics and computes parameter updates according to the learning rules:
@@ -196,8 +205,7 @@ With MHz-scale p-bit dynamics, this enables thousands of parameter updates per s
 \label{sec:learning_rules}
 
 We now make concrete the finite-time learning objective used by the Gradient Engine.
-We work with a continuous state vector $\mathbf{x}\in\mathbb{R}^N$ and define a local
-potential $V_{\bm{\theta}}(\mathbf{x})$ whose gradients take the form
+We work with a continuous state vector $\mathbf{x}\in\mathbb{R}^N$ and specialize the generic energy $U$ from Section~2 to a $\varphi^4$+Ising potential $V_{\bm{\theta}}(\mathbf{x})$ whose gradients take the form
 \begin{equation}
 \partial_i V_{\bm{\theta}}(\mathbf{x}) =
 2J_2 x_i + 4J_4 x_i^3 + b_i + \sum_{j\in\mathcal{N}(i)} J_{ij} x_j,
@@ -220,8 +228,8 @@ x_i^{k+1} = x_i^{k} + \Delta x_i^{k},
 \Delta x_i^{k} = -\mu\,\partial_i V_{\bm{\theta}}(\mathbf{x}^{\prime k})\Delta t
  + \sqrt{2k_{\rm B}T\mu\,\Delta t}\;\eta_i^{k},
 \end{equation}
-where $\mathbf{x}^{\prime k}$ is an evaluation point (e.g.\ the updated state) and
-$\eta_i^{k}$ are i.i.d.\ standard normal variables.
+where $\mathbf{x}^{\prime k}$ is the evaluation point for the drift and $\eta_i^{k}$ are i.i.d.\ standard normal variables.
+For simplicity we use $\mathbf{x}^{\prime k} = \mathbf{x}^k$ (the explicit Euler scheme), though midpoint or implicit schemes can reduce discretization bias at the cost of requiring $\mathbf{x}^{k+1}$ in the gradient expression.
 The corresponding single-step transition density
 $\tilde P_{\bm{\theta}}^{\rm step}(\Delta\mathbf{x}^k\mid\mathbf{x}^k)$ is Gaussian in
 $\Delta\mathbf{x}^k$.
@@ -289,6 +297,13 @@ Learning to predict this forward trajectory simultaneously trains the system to 
 
 This time-reversal property distinguishes the Criticality Engine from inference-only thermodynamic accelerators: the same physical dynamics that perform inference also support training, without requiring separate forward and backward computational passes.
 
+\textbf{Detailed balance as an estimation ansatz.}
+We emphasize that detailed balance here is a \emph{modeling assumption}, not a claim about the physical substrate.
+Real p-bit arrays will exhibit parasitics, asymmetries, and colored noise that violate exact time-reversibility.
+However, we adopt Eqs.~(\ref{eq:J_grad})--(\ref{eq:b_grad}) as a \emph{surrogate generative model} for learning: from observed increments $\Delta x_i^k$ and local neighbor states $x_j(t_k)$, we obtain closed-form local gradients $\partial_{J_{ij}} \log P(\Delta \mathbf{x}^k | \mathbf{x}^k)$.
+The backward model provides an additional consistency signal and reduces estimator variance.
+Deviations from the assumed model appear as structured residuals (action asymmetry between forward and backward paths), which can be monitored as a diagnostic and potentially incorporated into more refined learning rules.
+
 \section{Path Integral Formulation: Learning as Constraint Satisfaction}
 \label{sec:constraint}
 
@@ -320,7 +335,7 @@ Define the \emph{constraint surface} $\mathcal{C}$ as the set of parameters for 
 \end{equation}
 where $S_{\rm thermal} = \int_0^T (\text{noise})^2/(4\mu k_{\rm B}T)\,dt$ represents the irreducible action from thermal fluctuations.
 
-On this surface, $\exp(-S) \to 1$ (normalized appropriately): the observed trajectories are \emph{maximally likely} under the model.
+On this surface, the action reaches its minimum (the ``thermal floor'' set by irreducible noise), and observed trajectories are \emph{maximally likely} relative to all competing paths.
 Learning consists of projecting onto $\mathcal{C}$---finding parameters where the observed dynamics are physically consistent with the model.
 
 This is fundamentally different from conventional machine learning optimization:
@@ -369,6 +384,10 @@ The constraint surface interpretation explains an empirical observation: traject
 Figure~\ref{fig:convergence} shows parameter recovery on a synthetic task: a ground-truth model generates trajectories, and a randomly-initialized model learns to match them.
 Within 10--20 epochs, cosine similarity between learned and true parameters exceeds 99\%.
 The action difference $|S_{\rm forward} - S_{\rm backward}|$ drops by orders of magnitude, confirming that detailed balance is restored.
+
+\textbf{Experimental protocol.}
+The verification uses: $N = 30$ dimensional state space; $\varphi^4$ + bias potential with $J_2 = -1$, $J_4 = 0.5$, $kT = 0.5$; ground-truth bias $\mathbf{b}^* \sim \mathcal{N}(0, 2^2)$; 1000 equilibrium samples as starting points (500-step burn-in at $\Delta t = 0.02$); 20-step trajectories per sample at $\Delta t = 0.05$; Adam optimizer with learning rate 0.1; batch size 100.
+Results are consistent across 10 random seeds (mean cosine similarity $0.9977 \pm 0.002$ at epoch 100).
 
 \begin{figure}[h]
 \centering
@@ -484,6 +503,11 @@ For MHz p-bit dynamics, sampling at 10--100~MHz provides the right resolution.
 \textbf{Analog-to-digital conversion.}
 If downstream processing is digital, ADCs convert the sampled voltages.
 However, much of the statistics computation (means, correlations) can be performed in the analog domain, reducing ADC requirements.
+
+\textbf{What ``non-destructive'' means.}
+By non-destructive we mean standard high-impedance analog readout: sensing $x_i(t_k)$ does not reset the node or inject a perturbation comparable to intrinsic thermal noise.
+This is implemented via buffered sampling with bandwidth separation, so the measurement contributes negligible back-action relative to the modeled stochastic dynamics.
+If probe capacitance or loading becomes non-negligible, it manifests as an additional noise or drift term that is detectable (via action asymmetry) and calibratable.
 
 \subsection{Reconfiguration: Dual-Bank Parameter Updates}
 
@@ -604,7 +628,7 @@ Multi-scale relaxation networks, hybrid digital--thermodynamic training, and con
 We have presented the Criticality Engine, the first end-to-end architecture for a trainable thermodynamic neural computer with on-chip measurement, gradient estimation, and rapid reconfiguration.
 
 The central theoretical contribution is the reframing of learning as \emph{constraint satisfaction} rather than optimization.
-The Onsager-Machlup action $S[\mathbf{x}(t)]$ defines a constraint surface: when parameters are correct, $\exp(-S) \to 1$ and observed trajectories are maximally likely.
+The Onsager-Machlup action $S[\mathbf{x}(t)]$ defines a constraint surface: correct parameters minimize the action to its thermal floor, making observed trajectories maximally likely while competing paths are exponentially suppressed.
 Temperature acts as a Lagrangian multiplier controlling constraint tightness, while forward-backward symmetry (detailed balance) provides additional constraints that accelerate convergence.
 This explains the empirically observed rapid learning---99\% parameter recovery in 10--20 epochs---because projecting onto a constraint surface is geometrically simpler than searching a high-dimensional loss landscape.
 
@@ -646,7 +670,7 @@ With a single shared potential, unconditional generation from random initializat
 From the constraint satisfaction perspective of Section~\ref{sec:constraint}, this is not a failure of learning but a geometric fact: \emph{a single constraint surface cannot represent multiple modes}.
 
 The MNIST distribution has 10 distinct modes (digit classes).
-A shared potential $V(\mathbf{x})$ defines one constraint surface $\mathcal{C}$ where $\exp(-S) \to 1$.
+A shared potential $V(\mathbf{x})$ defines one constraint surface $\mathcal{C}$ where the action is minimized.
 But each digit class requires its \emph{own} constraint surface---trajectories of 3's should be likely under $V_3$, not under $V_7$.
 Attempting to find shared parameters that make \emph{all} digit trajectories likely is geometrically impossible; the constraint surfaces for different classes do not intersect.
 
