@@ -738,7 +738,7 @@ The couplings $J_{ij}$ remain shared across classes (encoding common structure l
 From the path integral view: training with class-$c$ trajectories projects $\mathbf{b}_c$ onto the surface where those trajectories have $\exp(-S_c) \to 1$.
 Each class has its own constraint surface, and the biases are learned independently via the trajectory action.
 
-\textbf{Attractor visualization:} Starting from uniform gray ($x_i = 0$) and evolving under $V_c$, pixels organize into the pattern for digit $k$.
+\textbf{Attractor visualization:} Starting from uniform gray ($x_i = 0$) and evolving under $V_c$, pixels organize into the pattern for digit $c$.
 The learned biases $\mathbf{b}_c$ resemble digit templates---analogous to Hopfield stored patterns---and conditional generation produces recognizable digits.
 The fast convergence demonstrated in Figure~\ref{fig:trajectory} applies equally when starting from gray: structure emerges in $\sim$10 steps and stabilizes by $\sim$20 steps.
 
@@ -752,7 +752,7 @@ The answer is that the learned potentials themselves provide classification.
 \textbf{Energy-based recognition.}
 Given input $\mathbf{x}$, evaluate the energy (or gradient magnitude) under each class potential:
 \begin{equation}
-k^* = \arg\min_k V_c(\mathbf{x}) \quad \text{or equivalently} \quad k^* = \arg\min_k \|\nabla V_c(\mathbf{x})\|^2.
+c^* = \arg\min_c V_c(\mathbf{x}) \quad \text{or equivalently} \quad c^* = \arg\min_c \|\nabla V_c(\mathbf{x})\|^2.
 \end{equation}
 The class with lowest energy (or smallest gradient, indicating proximity to equilibrium) is selected.
 This is precisely \emph{Hopfield associative memory}: the biases $\mathbf{b}_c$ act as stored patterns, and recognition finds the nearest attractor.
@@ -760,9 +760,9 @@ This is precisely \emph{Hopfield associative memory}: the biases $\mathbf{b}_c$ 
 \textbf{Complete inference pipeline:}
 \begin{enumerate}
 \item \textbf{Input}: Present noisy or partial pattern $\mathbf{x}$ to the T-array.
-\item \textbf{Recognize}: Evaluate $V_c(\mathbf{x})$ for all $k$ (parallelizable across bias banks). Select $k^* = \arg\min_k V_c(\mathbf{x})$.
-\item \textbf{Load}: Reconfiguration fabric loads bias bank $\mathbf{b}_{k^*}$.
-\item \textbf{Relax}: System evolves under $V_{k^*}$; output converges to clean reconstruction.
+\item \textbf{Recognize}: Evaluate $V_c(\mathbf{x})$ for all $c$ (parallelizable across bias banks). Select $c^* = \arg\min_c V_c(\mathbf{x})$.
+\item \textbf{Load}: Reconfiguration fabric loads bias bank $\mathbf{b}_{c^*}$.
+\item \textbf{Relax}: System evolves under $V_{c^*}$; output converges to clean reconstruction.
 \end{enumerate}
 
 In principle, this unifies classification and generation in a single energy-based framework.
@@ -824,7 +824,7 @@ the contrastive objective provides detailed balance in \emph{class space}. Defin
 p(k|\mathbf{x}) = \frac{\exp(-V_c(\mathbf{x})/T)}{\sum_j \exp(-V_j(\mathbf{x})/T)},
 \label{eq:class_softmax}
 \end{equation}
-a Boltzmann distribution over discrete class labels. At low temperature $T \to 0$, this concentrates on $k^* = \arg\min_k V_c(\mathbf{x})$. The contrastive loss ensures this ``classification dynamics'' has the correct fixed point: data from class $c$ should flow to class $c$.
+a Boltzmann distribution over discrete class labels. At low temperature $T \to 0$, this concentrates on $c^* = \arg\min_c V_c(\mathbf{x})$. The contrastive loss ensures this ``classification dynamics'' has the correct fixed point: data from class $c$ should flow to class $c$.
 
 \textbf{Joint distribution and RBM connection.}
 The class-conditional structure reveals a connection to Restricted Boltzmann Machines. Consider the joint distribution
@@ -854,7 +854,7 @@ For now, the system excels at \emph{conditional} tasks (generation and denoising
 \subsection{Hardware Interpretation}
 The class-conditional structure maps directly to hardware: the reconfiguration fabric stores $K$ bias banks $\{\mathbf{b}_0, \ldots, \mathbf{b}_{K-1}\}$.
 Recognition requires evaluating $K$ energies, which can be done in parallel using $K$ copies of the gradient computation circuit, followed by a winner-take-all selection.
-Once $k^*$ is determined, the appropriate bank is loaded ($\sim$ns DAC settling), and the T-array relaxes to produce the output.
+Once $c^*$ is determined, the appropriate bank is loaded ($\sim$ns DAC settling), and the T-array relaxes to produce the output.
 This provides a physical implementation of content-addressable memory with learned attractors.
 
 \subsection{Quantum-Classical Correspondence}
