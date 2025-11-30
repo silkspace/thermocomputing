@@ -71,8 +71,8 @@ box(9, 3.2, 2.7, 1.4, 'Local Statistics', 'Correlators $m_i, C_{ij}$',
 box(9, 1.4, 2.7, 1.4, 'Gradient Engine', 'Compute $\\Delta\\theta$',
     colors['gradient'], colors['gradient_border'])
 
-# Left: Reconfig (compact)
-box(0.3, 1.4, 2.7, 3.2, 'Reconfiguration', 'Dual-bank DACs\n$\\{\\mathbf{b}_k\\}, J$',
+# Left: Reconfig (compact - same height as Stats+Gradient)
+box(0.3, 1.4, 2.7, 1.8, 'Reconfiguration', 'DACs, $\\{\\mathbf{b}_k\\}, J$',
     colors['reconfig'], colors['reconfig_border'])
 
 # Arrows - tight
@@ -99,9 +99,9 @@ ax.text(6, 1.4, '$\\Delta J, \\Delta\\mathbf{b}$', ha='center',
         fontsize=9, color=colors['reconfig_border'])
 
 # Reconfig → T-array
-ax.annotate('', xy=(3.5, 3), xytext=(3, 3),
+ax.annotate('', xy=(3.5, 2.5), xytext=(3, 2.5),
             arrowprops=dict(**arrow_kw, color=colors['reconfig_border']))
-ax.text(3.25, 3.3, 'params', fontsize=7, ha='center', color=colors['reconfig_border'])
+ax.text(3.25, 2.75, 'params', fontsize=7, ha='center', color=colors['reconfig_border'])
 
 # Compact legend
 ax.text(6, 0.7, '① Sample → ② Measure → ③ Statistics → ④ Gradients → ⑤ Reconfigure',
