@@ -4,6 +4,7 @@
 \usepackage{cite}
 \usepackage{hyperref}
 \usepackage{geometry}
+\usepackage{booktabs}
 \geometry{margin=1in}
 
 \title{
@@ -102,7 +103,7 @@ We describe each in turn, following a single learning cycle.
 
 \begin{figure}[h]
 \centering
-\includegraphics[width=\textwidth]{architecture_schematic.png}
+\includegraphics[width=\textwidth]{paper_figures/architecture_schematic.png}
 \caption{Processor architecture of the Criticality Engine. The Thermodynamic Array (blue) implements Langevin dynamics; the Measurement Plane (orange) samples trajectories; the Local Statistics Layer (purple) computes correlations; the Gradient Engine (green) derives parameter updates; and the Reconfiguration Fabric (red) applies new parameters atomically. Arrows indicate data flow through one learning cycle.}
 \label{fig:architecture}
 \end{figure}
@@ -390,7 +391,7 @@ Results are consistent across 10 random seeds (mean cosine similarity $0.9977 \p
 
 \begin{figure}[h]
 \centering
-\includegraphics[width=0.8\textwidth]{trajectory_action_learning.png}
+\includegraphics[width=0.8\textwidth]{paper_figures/trajectory_action_learning.png}
 \caption{Trajectory action learning converges rapidly. Top left: Forward and backward actions converge to the thermal floor. Top right: Action asymmetry (detailed balance violation) decreases exponentially. Bottom left: Cosine similarity with true parameters approaches unity. Bottom right: Scatter plot of learned vs. true bias parameters shows near-perfect recovery ($>$99\% correlation).}
 \label{fig:convergence}
 \end{figure}
@@ -423,7 +424,7 @@ Figure~\ref{fig:circuits} shows the three key circuit elements.
 
 \begin{figure}[h]
 \centering
-\includegraphics[width=\textwidth]{circuit_diagrams.png}
+\includegraphics[width=\textwidth]{paper_figures/circuit_diagrams.png}
 \caption{Circuit building blocks. (a) A stochastic p-bit cell: cross-coupled inverters biased at threshold fluctuate between states due to thermal noise. (b) Current mirror coupling: the W/L ratio sets the coupling strength $J_{ij}$. (c) Dual-bank reconfiguration: the MUX atomically swaps between active and shadow parameter banks.}
 \label{fig:circuits}
 \end{figure}
@@ -536,24 +537,42 @@ Key specifications:
 
 \subsection{Putting It Together: A Complete Node}
 
-A single node in the Criticality Engine integrates:
-\begin{enumerate}
-\item One p-bit cell (cross-coupled inverters with bias input),
-\item $d$ current mirror inputs (from neighboring nodes),
-\item $d$ current mirror outputs (to neighboring nodes),
-\item One sample-and-hold circuit with local register,
-\item One DAC for the bias $b_i$, plus shared access to coupling DACs.
-\end{enumerate}
+Figure~\ref{fig:node_anatomy} shows the anatomy of a single node in the Criticality Engine.
+Each node integrates five functional blocks: the stochastic p-bit cell at its core, current mirror networks for bidirectional coupling with neighbors, a sample-and-hold circuit for state readout, and DACs for programmable parameters.
 
-For a 1000-node array with $d=10$ average connectivity, this amounts to roughly:
-\begin{itemize}
-\item 1000 p-bit cells ($\sim$10 transistors each),
-\item 10,000 current mirrors ($\sim$4 transistors each),
-\item 1000 sample-and-hold circuits,
-\item 1000 bias DACs + 10,000 coupling DACs (or shared with time-multiplexing).
-\end{itemize}
-Total transistor count: $\sim$100K--1M, comparable to a small microcontroller.
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{paper_figures/node_anatomy.png}
+\caption{\textbf{Anatomy of a single node.}
+The p-bit cell (center) receives weighted currents from $d$ neighbors via current mirrors (left) and broadcasts its state to $d$ neighbors (right).
+A sample-and-hold circuit captures the stochastic state $x_i(t)$ for digital readout, while a bias DAC sets the local field $b_i$.
+For a 1000-node array with $d=10$ connectivity, the total transistor count remains comparable to a small microcontroller.}
+\label{fig:node_anatomy}
+\end{figure}
+
+Table~\ref{tab:component_count} summarizes the component requirements for a 1000-node array with average connectivity $d=10$.
+The total transistor count of $\sim$280K is comparable to a small microcontroller.
 In a 28nm process, this fits in approximately 1--10~mm$^2$---a small chip by modern standards.
+
+\begin{table}[t]
+\centering
+\caption{Component count for a 1000-node array with $d=10$ average connectivity.}
+\label{tab:component_count}
+\small
+\begin{tabular}{lrrr}
+\toprule
+\textbf{Component} & \textbf{Count} & \textbf{Transistors/unit} & \textbf{Total} \\
+\midrule
+P-bit cells & 1,000 & $\sim$10 & 10K \\
+Current mirrors & 10,000 & $\sim$4 & 40K \\
+Sample-and-hold & 1,000 & $\sim$6 & 6K \\
+Bias DACs & 1,000 & $\sim$20 & 20K \\
+Coupling DACs & 10,000 & $\sim$20 & 200K \\
+\midrule
+\textbf{Total} & & & \textbf{$\sim$280K} \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Comparison to Existing Hardware}
 
@@ -659,8 +678,8 @@ Figure~\ref{fig:trajectory} shows a representative relaxation trajectory: a nois
 
 \begin{figure}[h]
 \centering
-\includegraphics[width=\textwidth]{criticality_trajectory.png}
-\caption{Relaxation trajectory under the class-conditional $\varphi^4$+Ising potential. Starting from heavy noise (t=0, barely recognizable), the system evolves under the digit-3 potential $V_3(\mathbf{x})$. Pixels are progressively ``attracted'' to the digit-3 attractor basin, crystallizing into a sharp reconstruction by t=300.}
+\includegraphics[width=\textwidth]{paper_figures/trajectory_fast.png}
+\caption{Relaxation trajectory under the $\varphi^4$+bias potential. Starting from random noise (t=0), the system rapidly converges to the digit-3 attractor. Structure is visible by t=5, clear by t=10, and stable by t=20. This fast convergence ($\sim$10--20 steps vs.\ hundreds in naive implementations) reflects the strong restoring forces of the $\varphi^4$ bistable wells combined with learned biases.}
 \label{fig:trajectory}
 \end{figure}
 
@@ -694,31 +713,11 @@ The couplings $J_{ij}$ remain shared across classes (encoding common structure l
 From the path integral view: training with class-$k$ trajectories projects $\mathbf{b}_k$ onto the surface where those trajectories have $\exp(-S_k) \to 1$.
 Each class has its own constraint surface, and the biases are learned independently via the trajectory action.
 
-\textbf{Attractor visualization:} Starting from uniform gray ($x_i = 0$) and evolving under $V_k$, pixels organize into the pattern for digit $k$ (Figure~\ref{fig:attractors}).
+\textbf{Attractor visualization:} Starting from uniform gray ($x_i = 0$) and evolving under $V_k$, pixels organize into the pattern for digit $k$.
 The learned biases $\mathbf{b}_k$ resemble digit templates---analogous to Hopfield stored patterns---and conditional generation produces recognizable digits.
+The fast convergence demonstrated in Figure~\ref{fig:trajectory} applies equally when starting from gray: structure emerges in $\sim$10 steps and stabilizes by $\sim$20 steps.
 
-\begin{figure}[h]
-\centering
-\includegraphics[width=\textwidth]{attractors_comparison.png}
-\caption{Comparison of real digit averages (top), learned attractors from relaxation under $V_k$ (middle), and raw bias templates $-\mathbf{b}_k$ (bottom). The learned attractors are sharper than real averages due to bistable $\varphi^4$ dynamics.}
-\label{fig:attractors}
-\end{figure}
-
-\textbf{Wrong-label test:} Denoising a digit with an incorrect class label reshapes it toward the wrong class (Figure~\ref{fig:conditional}), confirming that labels act as latent mode selectors that activate distinct attractor basins.
-
-\begin{figure}[h]
-\centering
-\includegraphics[width=\textwidth]{full_pipeline.png}
-\caption{Full inference pipeline. Row 1: clean digits. Row 2: noisy inputs. Row 3: denoised using energy-predicted class $k^*$ (green = correct, red = incorrect prediction). Row 4: denoised using true class label. Classification accuracy is limited, but conditional denoising (row 4) is reliable.}
-\label{fig:conditional}
-\end{figure}
-
-\begin{figure}[h]
-\centering
-\includegraphics[width=\textwidth]{attractors_from_gray.png}
-\caption{Attractor dynamics: each row shows evolution under a different class potential $V_k$. Starting from uniform gray (t=0), pixels self-organize into the corresponding digit pattern. This demonstrates that the learned biases create digit-specific energy basins.}
-\label{fig:attractor_dynamics}
-\end{figure}
+\textbf{Wrong-label test:} Denoising a digit with an incorrect class label reshapes it toward the wrong class, confirming that labels act as latent mode selectors that activate distinct attractor basins.
 
 \subsection{Recognition and the Complete Pipeline}
 
@@ -822,21 +821,8 @@ The joint distribution (\ref{eq:joint}) suggests an alternating inference proced
 \end{enumerate}
 This provides a principled way to jointly sample configurations and class labels, unifying generation and classification in a single thermodynamic framework.
 
-Figure~\ref{fig:biases} shows the learned class biases $-\mathbf{b}_k$, which function as attractor templates analogous to Hopfield stored patterns.
-
-\begin{figure}[h]
-\centering
-\includegraphics[width=\textwidth]{class_biases.png}
-\caption{Learned class biases $-\mathbf{b}_k$ for digits 0--9. Red indicates pixels that the class ``wants'' to be positive (white), blue indicates pixels pulled toward negative (black). The biases resemble smoothed digit templates.}
-\label{fig:biases}
-\end{figure}
-
-\begin{figure}[h]
-\centering
-\includegraphics[width=\textwidth]{contrastive_biases.png}
-\caption{Contrastive signal: $-b_k + \frac{1}{K-1}\sum_{j\neq k} b_j$ for each class. This shows what makes each digit \emph{unique}---the discriminative features that separate it from other classes. Note how digit 1 emphasizes the vertical stroke while suppressing surrounding regions.}
-\label{fig:contrastive}
-\end{figure}
+The learned class biases $-\mathbf{b}_k$ function as attractor templates analogous to Hopfield stored patterns, resembling smoothed digit templates where positive (negative) bias values attract pixels toward white (black).
+The contrastive signal $-b_k + \frac{1}{K-1}\sum_{j\neq k} b_j$ reveals what makes each digit \emph{unique}---the discriminative features that separate it from other classes.
 
 For now, the system excels at \emph{conditional} tasks (generation and denoising given the class label) rather than pure \emph{recognition}; contrastive fine-tuning to improve classification accuracy remains future work.
 
@@ -854,8 +840,5 @@ The trajectory probability $P[\mathbf{x}(t)] \propto \exp(-S[\mathbf{x}])$ with 
 This correspondence illuminates why learning at criticality is efficient: operating p-bits at threshold corresponds to the critical point of the $(d{+}1)$-dimensional theory, where temporal correlations become long-range.
 The ``strong coupling in time'' allows information to propagate efficiently across the time dimension, meaning that each trajectory strongly constrains model parameters.
 This is the physical origin of the rapid convergence observed in Figure~\ref{fig:convergence}---criticality maximizes the information content per trajectory, and the constraint surface becomes maximally informative.
-
-\section{Derivations}
-Detailed derivations of gradient estimators, time-reversal likelihoods, and relaxation bounds will be provided in an expanded version.
 
 \end{document}
