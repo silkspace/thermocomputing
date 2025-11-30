@@ -1,0 +1,510 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath,amsfonts,amssymb,bm}
+\usepackage{graphicx}
+\usepackage{cite}
+\usepackage{hyperref}
+\usepackage{geometry}
+\geometry{margin=1in}
+
+\title{
+\vspace{-1cm}
+\bfseries
+The Criticality Engine:\\
+Online Learning in Thermodynamic Neural Computers
+}
+
+\author{
+Alexander Morisse\footnote{Email: alex@morisse.ai} \qquad
+Stephen Whitelam\footnote{Email: whitelam@lbl.gov}
+\\
+\small{\emph{Independent Research Collaboration}}\\
+}
+
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We introduce the \emph{Criticality Engine}, a computational architecture that performs both inference and online learning by exploiting the intrinsic stochastic dynamics of thermodynamic systems.
+CMOS p-bits biased at threshold naturally sample from Gibbs distributions; rather than simulating stochastic differential equations digitally, our architecture instantiates them directly in hardware.
+The processor provides three primitives for physical learning: (i) on-chip measurement of dynamical trajectories at chosen observation times, (ii) on-chip estimation of gradients via local correlators, and (iii) rapid reprogramming of the physical coupling network through dual-bank parameter storage.
+We derive learning rules based on finite-time trajectory likelihoods, describe a hardware blueprint using current-mirror coupling fabrics, and analyze convergence via relaxation spectra.
+This establishes a route toward trainable thermodynamic neural networks with potential for significant energy reduction compared to digital simulation.
+\end{abstract}
+
+\section{Introduction}
+
+Modern machine learning systems rely on the numerical simulation of dynamical processes. 
+Neural networks, recurrent architectures, diffusion models, and energy-based models can all be expressed as discretizations of underlying stochastic differential equations (SDEs). 
+Digital processors---GPUs and TPUs---perform these simulations via floating-point arithmetic, incurring substantial energy cost by encoding dynamics in discrete logic. 
+An alternative paradigm is to realize the dynamics directly in hardware: a \emph{thermodynamic computer}.
+
+Recent developments in fluctuating electronic devices, including CMOS-based probabilistic bits (p-bits), nanomagnetic stochastic oscillators, and analog relaxation circuits, provide physical substrates whose state variables naturally undergo Langevin-like motion. 
+Existing thermodynamic hardware accelerators (e.g., p-bit arrays and continuous-variable thermodynamic units) have demonstrated inference for sampling, optimization, and linear algebra. 
+However, no current architecture supports \emph{training} on-chip---the ability to estimate gradients of task-specific objectives and modify physical couplings accordingly.
+
+In this work we propose the \emph{Criticality Engine}, an architecture designed to close this gap.
+The key insight is that CMOS p-bits biased at threshold are inherently critical: the probability $p(s_i=1) = \sigma(h_i)$ realizes Gibbs sampling in physics, not simulation.
+Our system treats the thermodynamic array as a continuous-time recurrent neural network, provides a measurement plane for sampling trajectories, implements gradient estimators based on local correlators, and reconfigures couplings using a dual-bank analog front-end.
+Learning emerges from the relaxation dynamics themselves, not from numerical backpropagation.
+
+\section{Physical Model}
+
+The system consists of $N$ interacting stochastic units (nodes) whose state variables are denoted $x_i(t)$. 
+Depending on implementation, $x_i$ may represent:
+\begin{itemize}
+    \item a fluctuating voltage or current (continuous variable),
+    \item the metastable output of a CMOS p-bit (binary variable),
+    \item the magnetization state of a superparamagnetic nanomagnet.
+\end{itemize}
+
+We model the dynamics by the overdamped Langevin equation
+\begin{equation}
+\frac{dx_i}{dt} = f_i(\mathbf{x};\bm{\theta}) + \sqrt{2D_i}\,\eta_i(t),
+\label{eq:langevin}
+\end{equation}
+where $\bm{\theta}$ denotes tunable physical parameters (biases, couplings), $D_i$ encodes noise strength, and $\eta_i(t)$ are independent white-noise processes.
+
+In many realizations the deterministic drift derives from an energy function:
+\begin{equation}
+f_i(\mathbf{x};\bm{\theta}) = -\frac{\partial U(\mathbf{x};\bm{\theta})}{\partial x_i},
+\end{equation}
+so that (\ref{eq:langevin}) defines a relaxation toward a thermodynamic equilibrium distribution
+\begin{equation}
+p_{\bm{\theta}}(\mathbf{x}) \propto \exp\!\left[-\beta U(\mathbf{x};\bm{\theta})\right].
+\end{equation}
+
+We emphasize the analogy with recurrent neural networks (RNNs): the mapping
+\[
+f(\mathbf{x}) \;\longleftrightarrow\; \text{hidden-state update in a continuous-time RNN},
+\]
+and
+\[
+U(\mathbf{x}) \;\longleftrightarrow\; \text{energy function of an energy-based model}.
+\]
+Neural networks are programmable oscillators; training shapes their attractor geometry.
+Our architecture treats these structures as \emph{physical}, not virtual.
+
+\section{Processor Architecture}
+
+The proposed processor consists of five integrated subsystems:
+
+\subsection{Thermodynamic Array (T-array)}
+A physical substrate implementing Eq.~(\ref{eq:langevin}) for $N$ nodes. 
+Couplings $J_{ij}$ and biases $h_i$ are realized using analog primitives: current mirrors, programmable transconductors, or memristive elements.
+The T-array may be replicated $R$ times to sample trajectory ensembles.
+
+\subsection{Measurement Plane}
+A high-impedance sampling network collects instantaneous states $\{x_i^{(r)}(t_k)\}$ at configurable observation times $\{t_k\}$. 
+Sample-and-hold circuits or sense amplifiers latch state values into local registers with minimal perturbation.
+
+\subsection{Local Statistics Layer}
+For each interaction parameter $\theta_\alpha$, local correlator blocks compute empirical statistics such as
+\begin{equation}
+m_i(t_k) = \frac{1}{R}\sum_{r=1}^R x_i^{(r)}(t_k), \qquad
+C_{ij}(t_k) = \frac{1}{R}\sum_{r=1}^R x_i^{(r)}(t_k) x_j^{(r)}(t_k).
+\end{equation}
+These quantities serve as sufficient statistics for gradient estimation.
+
+\subsection{Gradient Engine}
+A lightweight digital core (e.g., vector microcontroller) reads statistics and computes parameter updates $\Delta\theta_\alpha$ according to learning rules derived in Section~\ref{sec:learning_rules}. 
+Results are written to a \emph{shadow} parameter bank.
+
+\subsection{Reconfiguration Fabric}
+A dual-bank DAC/current-mirror array converts parameter values into analog quantities applied to the T-array. 
+A global bank-select signal implements atomic parameter updates.
+
+\section{Finite-Time Learning Objectives and Gradient Estimation}
+\label{sec:learning_rules}
+
+We now make concrete the finite-time learning objective used by the Gradient Engine.
+We work with a continuous state vector $\mathbf{x}\in\mathbb{R}^N$ and define a local
+potential $V_{\bm{\theta}}(\mathbf{x})$ whose gradients take the form
+\begin{equation}
+\partial_i V_{\bm{\theta}}(\mathbf{x}) =
+2J_2 x_i + 4J_4 x_i^3 + b_i + \sum_{j\in\mathcal{N}(i)} J_{ij} x_j,
+\label{eq:local_potential_grad}
+\end{equation}
+where $J_2$ and $J_4$ are scalar coefficients, $b_i$ are local biases, $J_{ij}$ are
+couplings on the interaction graph, and $\mathcal{N}(i)$ denotes the neighbour set of
+node $i$.  The overdamped dynamics can then be written as
+\begin{equation}
+dx_i = -\mu\,\partial_i V_{\bm{\theta}}(\mathbf{x})\,dt
+      + \sqrt{2k_{\rm B}T\mu}\;dW_i(t),
+\end{equation}
+with mobility $\mu$ and thermal energy $k_{\rm B}T$.
+
+Discretising time with step size $\Delta t$ and using an Euler--Maruyama scheme gives
+the observed forward trajectory
+\begin{equation}
+x_i^{k+1} = x_i^{k} + \Delta x_i^{k},
+\qquad
+\Delta x_i^{k} = -\mu\,\partial_i V_{\bm{\theta}}(\mathbf{x}^{\prime k})\Delta t
+ + \sqrt{2k_{\rm B}T\mu\,\Delta t}\;\eta_i^{k},
+\end{equation}
+where $\mathbf{x}^{\prime k}$ is an evaluation point (e.g.\ the updated state) and
+$\eta_i^{k}$ are i.i.d.\ standard normal variables.
+The corresponding single-step transition density
+$\tilde P_{\bm{\theta}}^{\rm step}(\Delta\mathbf{x}^k\mid\mathbf{x}^k)$ is Gaussian in
+$\Delta\mathbf{x}^k$.
+
+Our learning objective at observation times $\{t_k\}$ is the negative log-likelihood
+of these observed forward steps,
+\begin{equation}
+L(\bm{\theta}) = -\sum_{k} w_k
+\ln \tilde P_{\bm{\theta}}^{\rm step}\!\left(\Delta\mathbf{x}^k\mid\mathbf{x}^k\right),
+\label{eq:finite_time_loss}
+\end{equation}
+where $\Delta\mathbf{x}^k = \mathbf{x}^{k+1}-\mathbf{x}^{k}$ is the displacement over
+step $k$ and $w_k$ are user-chosen weights.  Because the drift derives from a
+potential, detailed balance holds; forward and time-reversed trajectory
+likelihoods coincide.  As a result, minimising (\ref{eq:finite_time_loss}) using
+forward trajectories also maximises the likelihood of the most probable
+backward (reconstructive) trajectories.
+
+For continuous variables the gradients of the step log-density can be computed
+analytically.  For a coupling $J_{ij}$ we obtain
+\begin{equation}
+\!-\,\frac{\partial}{\partial J_{ij}}
+\ln \tilde P_{\bm{\theta}}^{\rm step}\!\left(\Delta\mathbf{x}^k\right)
+ =
+\frac{-\Delta x_i^{k} + \mu\,\partial_i V_{\bm{\theta}}(\mathbf{x}^{\prime k})\Delta t}
+     {2k_{\rm B}T}\;x_j^{k}
+ +
+\frac{-\Delta x_j^{k} + \mu\,\partial_j V_{\bm{\theta}}(\mathbf{x}^{\prime k})\Delta t}
+     {2k_{\rm B}T}\;x_i^{k},
+\label{eq:J_grad}
+\end{equation}
+and for a bias $b_i$
+\begin{equation}
+\!-\,\frac{\partial}{\partial b_i}
+\ln \tilde P_{\bm{\theta}}^{\rm step}\!\left(\Delta\mathbf{x}^k\right)
+ =
+\frac{-\Delta x_i^{k} + \mu\,\partial_i V_{\bm{\theta}}(\mathbf{x}^{\prime k})\Delta t}
+     {2k_{\rm B}T}.
+\label{eq:b_grad}
+\end{equation}
+Summing these contributions over timesteps $k$ and replicas yields unbiased
+stochastic gradients of $L(\bm{\theta})$ with respect to all local parameters
+$(b_i,J_{ij})$ using only quantities that are locally available on chip:
+displacements $\Delta x_i^{k}$, instantaneous forces
+$\partial_i V_{\bm{\theta}}$, and neighbour states $x_j^{k}$.
+
+\subsection{Velocity Matching Interpretation}
+The gradient formula (\ref{eq:J_grad}) admits a physical interpretation as \emph{velocity matching}.
+Defining the observed velocity $\dot x_i \approx \Delta x_i^k / \Delta t$ and the predicted force $f_i(\mathbf{x}) = -\mu\,\partial_i V_{\bm{\theta}}(\mathbf{x})$, we can rewrite the update rule as
+\begin{equation}
+\Delta J_{ij} \propto \left( f_i(\mathbf{x}) - \dot x_i \right) x_j + \left( f_j(\mathbf{x}) - \dot x_j \right) x_i.
+\label{eq:velocity_matching}
+\end{equation}
+The mismatch between predicted force and observed velocity provides the error signal.
+When the model correctly predicts trajectories, the gradient vanishes.
+
+This formulation connects to \emph{denoising score matching}: the score function $\nabla_{\mathbf{x}} \log p(\mathbf{x})$ equals $-\nabla V / k_{\rm B}T$ at equilibrium, so training the drift to match observed velocities is equivalent to learning the score.
+However, a crucial distinction applies: score matching optimizes \emph{local} gradients near data points but does not constrain the \emph{global} energy landscape.
+For multi-modal distributions, this implies that class-conditional parameterization may be necessary (see Appendix~\ref{sec:experiments}).
+
+\subsection{Time-Reversal and Reconstruction}
+Because the dynamics derive from a potential, detailed balance ensures that forward (relaxation) and backward (reconstruction) trajectory likelihoods coincide.
+Starting from data $\mathbf{x}_{\rm data}$, thermal relaxation generates a forward trajectory toward higher entropy.
+Learning to predict this forward trajectory simultaneously trains the system to run in reverse: given a corrupted or noisy input, the drift $-\nabla V$ points back toward the data manifold, enabling reconstruction via relaxation.
+
+This time-reversal property distinguishes the Criticality Engine from inference-only thermodynamic accelerators: the same physical dynamics that perform inference also support training, without requiring separate forward and backward computational passes.
+
+\section{Hardware Realization}
+
+We outline a CMOS-compatible realization.
+No exotic materials are required; the architecture uses standard digital and analog primitives.
+
+\subsection{Stochastic Unit}
+A p-bit cell consists of a metastable inverter pair biased near threshold, producing fluctuating outputs whose switching statistics encode local energies.
+Typical switching rates are in the MHz--GHz range depending on device sizing and temperature.
+
+\subsection{Coupling Fabric}
+Couplings $J_{ij}$ are synthesized via networks of current mirrors:
+\[
+I_{j\leftarrow i} = J_{ij} \, I_i.
+\]
+Mirror geometries implement multiplicative weights.
+Negative couplings use differential pair configurations with complementary current paths.
+For $N$ nodes with sparse connectivity (degree $d$), the coupling count scales as $O(Nd)$ rather than $O(N^2)$.
+
+\subsection{Measurement}
+Sense amplifiers couple capacitively to internal nodes, providing non-destructive snapshots of $x_i(t)$.
+Measurement bandwidth should exceed the correlation time of the dynamics to capture independent samples.
+
+\subsection{Reconfiguration}
+Parameter banks use SRAM with 8--12 bit DACs; higher precision reduces quantization noise in gradients but increases area.
+DAC settling times ($\sim$10--100~ns) set the minimum interval between parameter updates.
+The dual-bank architecture enables updates without interrupting ongoing relaxation dynamics.
+
+\section{Convergence and Relaxation Analysis}
+
+Let $\lambda_{\min}$ denote the spectral gap of the drift Jacobian.
+Mixing toward the $t_k$ distribution occurs at rate $\lambda_{\min}$:
+\begin{equation}
+\|\; p_{\bm{\theta}}^{(k)} - p_{\bm{\theta}}^\ast \;\|_{\rm TV}
+\lesssim e^{-\lambda_{\min} t_k}.
+\end{equation}
+Accuracy improves exponentially in $t_k$, subject to noise variance and discretization of the measurement plane.
+
+Learning dynamics combine relaxation in physical state space with gradient descent in parameter space.
+Convergence to a stationary point of $L$ requires:
+\begin{itemize}
+    \item Lipschitz-continuous drift $f_i(\mathbf{x};\bm{\theta})$ in both $\mathbf{x}$ and $\bm{\theta}$,
+    \item bounded gradient variance (ensured by sufficient replica count $R$),
+    \item learning rate $\eta$ small enough that parameters change slowly relative to state relaxation.
+\end{itemize}
+The effective learning rate must satisfy $\eta \ll \lambda_{\min}^{-1}$ to maintain quasi-static parameter evolution.
+
+\section{Applications}
+
+The architecture supports several application domains:
+\textbf{Classification}, where finite-time objectives train the T-array to develop class-dependent attractors;
+\textbf{generative modeling}, where time-reversal trajectory likelihoods enable physical generative models; and
+\textbf{linear algebra}, where continuous-variable instantiations recover thermodynamic formulations with equilibrium means encoding $A^{-1}b$.
+
+\textbf{Online learning latency.}
+A single training update requires: (i) relaxation time $\sim\lambda_{\min}^{-1}$ for state equilibration, (ii) measurement and gradient computation, and (iii) DAC settling for parameter update.
+With MHz-scale p-bit dynamics and ns-scale DAC updates, the architecture supports $\sim$kHz--MHz update rates---online in the sense of per-sample updates, though not streaming real-time for high-bandwidth data.
+
+\section{Discussion}
+
+The Criticality Engine exemplifies a new paradigm where training and inference are performed directly by nonequilibrium statistical dynamics, eliminating the need for digital simulation.
+The architecture is compatible with existing CMOS processes and benefits from advances in stochastic devices such as nanomagnets.
+
+\textbf{Relation to prior work.}
+The finite-time learning objective differs from classical Boltzmann machine training, which requires equilibrium sampling.
+Our approach shares motivation with equilibrium propagation but provides explicit hardware primitives rather than algorithmic recipes.
+Unlike inference-only thermodynamic accelerators (Ising machines, p-bit arrays for optimization), the Criticality Engine closes the training loop on-chip.
+
+\textbf{Limitations.}
+This paper presents an architecture; numerical validation on specific tasks remains future work.
+Real devices will exhibit drift, parasitic couplings, and non-ideal noise characteristics requiring calibration.
+The finite-time objective may not align with equilibrium properties for all tasks.
+
+\textbf{Future directions.}
+Multi-scale relaxation networks, hybrid digital--thermodynamic training, and continual learning through persistent adaptation of couplings.
+
+\section{Conclusion}
+
+We have presented the Criticality Engine, the first end-to-end architecture for a trainable thermodynamic neural computer with on-chip measurement, gradient estimation, and rapid reconfiguration.
+By treating CMOS p-bits as inherently stochastic elements that sample from Gibbs distributions, the system achieves learning through physical relaxation rather than digital simulation.
+This approach offers a route toward ultra-low-power, massively-parallel artificial intelligence systems.
+
+\appendix
+
+\section{Numerical Experiments}
+\label{sec:experiments}
+
+We validate the learning rules on MNIST digit reconstruction, using 14$\times$14 downsampled images (196 visible units).
+
+\subsection{The $\varphi^4$ Potential and Transistor Bistability}
+The $\varphi^4$ structure is not an architectural choice but a physical consequence of operating transistors at threshold.
+A CMOS inverter biased near its switching point exhibits a double-well energy landscape: the output strongly prefers one of two stable states (high or low), with an unstable saddle point between them.
+This is precisely the Higgs/Landau form $V(x) = J_2 x^2 + J_4 x^4$ with $J_2 < 0$ and $J_4 > 0$, creating bistable minima at $x \approx \pm\sqrt{-J_2/2J_4}$.
+
+The bistability is essential for representing discrete structure.
+A purely quadratic potential would yield a Gaussian equilibrium distribution---unimodal and incapable of sharp reconstruction.
+Instead, the $\varphi^4$ nonlinearity enables each node to ``snap'' toward one of two states, producing high-contrast outputs where pixels settle into their stable attractors rather than averaging toward gray.
+
+\subsection{Denoising via Relaxation}
+Training the $\varphi^4$+Ising potential (\ref{eq:local_potential_grad}) with denoising score matching yields a system where corrupted digits relax toward clean reconstructions.
+Starting from noisy inputs $\tilde x = x_{\rm data} + \epsilon$, Langevin dynamics follows the learned drift $-\nabla V$ back toward the data manifold.
+Score alignment (cosine similarity between learned drift and direction toward clean data) exceeds 0.8, confirming that the learned potential encodes the data distribution.
+Figure~\ref{fig:trajectory} shows a representative relaxation trajectory: a noisy digit ``3'' progressively sharpens as pixels settle into their bistable attractors.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{criticality_trajectory.png}
+\caption{Relaxation trajectory under the class-conditional $\varphi^4$+Ising potential. Starting from heavy noise (t=0, barely recognizable), the system evolves under the digit-3 potential $V_3(\mathbf{x})$. Pixels are progressively ``attracted'' to the digit-3 attractor basin, crystallizing into a sharp reconstruction by t=300.}
+\label{fig:trajectory}
+\end{figure}
+
+\subsection{Unconditional Generation Fails}
+Despite successful denoising, unconditional generation from random initialization produces scattered noise rather than digit patterns.
+This reveals a fundamental limitation: denoising score matching learns \emph{local} gradients near data but does not constrain energy \emph{far} from data.
+The system has many spurious local minima that trap random initializations.
+
+\textbf{Comparison to RBMs.}
+Restricted Boltzmann Machines achieve unconditional generation because hidden units create implicit modes:
+\begin{equation}
+p(\mathbf{v}) = \sum_{\mathbf{h}} \exp(-E(\mathbf{v},\mathbf{h})) / Z.
+\end{equation}
+Each hidden configuration $\mathbf{h}$ activates a different visible pattern, naturally partitioning the space into class-like attractors.
+Our model has no hidden units---the couplings $J_{ij}$ connect visible units directly---so modes must be created explicitly.
+
+However, RBMs also cannot target a \emph{specific} class without modification: generation produces a random sample from the learned distribution, and denoising reconstructs toward the nearest attractor (whichever $\mathbf{h}$ best explains the input).
+For targeted generation or class-specific denoising, both architectures benefit from explicit conditioning.
+
+The trade-off: RBMs require sampling from the model during training (contrastive divergence), while our trajectory-likelihood approach avoids model sampling but requires class-conditional biases for multi-modal structure.
+
+\subsection{Class-Conditional Potentials Restore Generation}
+The solution is \emph{class-conditional biases}: for each class $k \in \{0,\ldots,9\}$, we learn a separate bias vector $\mathbf{b}_k$, giving
+\begin{equation}
+\partial_i V_k(\mathbf{x}) = 2J_2 x_i + 4J_4 x_i^3 + b_{k,i} + \sum_{j} J_{ij} x_j.
+\end{equation}
+The couplings $J_{ij}$ remain shared across classes, but each $\mathbf{b}_k$ creates a class-specific attractor.
+
+\textbf{Attractor visualization:} Starting from uniform gray ($x_i = 0$) and evolving under $V_k$, pixels organize into the pattern for digit $k$ (Figure~\ref{fig:attractors}).
+The learned biases $\mathbf{b}_k$ resemble digit templates---analogous to Hopfield stored patterns---and conditional generation produces recognizable digits.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{attractors_comparison.png}
+\caption{Comparison of real digit averages (top), learned attractors from relaxation under $V_k$ (middle), and raw bias templates $-\mathbf{b}_k$ (bottom). The learned attractors are sharper than real averages due to bistable $\varphi^4$ dynamics.}
+\label{fig:attractors}
+\end{figure}
+
+\textbf{Wrong-label test:} Denoising a digit with an incorrect class label reshapes it toward the wrong class (Figure~\ref{fig:conditional}), confirming that labels act as latent mode selectors that activate distinct attractor basins.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{conditional_denoise.png}
+\caption{Class-conditional denoising. Row 1: original digits. Row 2: noisy inputs. Row 3: denoised with \emph{correct} class label---accurate reconstruction. Row 4: denoised with \emph{wrong} label (class 0 for all)---digits reshape toward zeros, confirming class-specific attractor selection.}
+\label{fig:conditional}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{attractors_from_gray.png}
+\caption{Attractor dynamics: each row shows evolution under a different class potential $V_k$. Starting from uniform gray (t=0), pixels self-organize into the corresponding digit pattern. This demonstrates that the learned biases create digit-specific energy basins.}
+\label{fig:attractor_dynamics}
+\end{figure}
+
+\subsection{Recognition and the Complete Pipeline}
+
+A key question arises: how does the system know which bias $\mathbf{b}_k$ to load for an unknown input?
+The answer is that the learned potentials themselves provide classification.
+
+\textbf{Energy-based recognition.}
+Given input $\mathbf{x}$, evaluate the energy (or gradient magnitude) under each class potential:
+\begin{equation}
+k^* = \arg\min_k V_k(\mathbf{x}) \quad \text{or equivalently} \quad k^* = \arg\min_k \|\nabla V_k(\mathbf{x})\|^2.
+\end{equation}
+The class with lowest energy (or smallest gradient, indicating proximity to equilibrium) is selected.
+This is precisely \emph{Hopfield associative memory}: the biases $\mathbf{b}_k$ act as stored patterns, and recognition finds the nearest attractor.
+
+\textbf{Complete inference pipeline:}
+\begin{enumerate}
+\item \textbf{Input}: Present noisy or partial pattern $\mathbf{x}$ to the T-array.
+\item \textbf{Recognize}: Evaluate $V_k(\mathbf{x})$ for all $k$ (parallelizable across bias banks). Select $k^* = \arg\min_k V_k(\mathbf{x})$.
+\item \textbf{Load}: Reconfiguration fabric loads bias bank $\mathbf{b}_{k^*}$.
+\item \textbf{Relax}: System evolves under $V_{k^*}$; output converges to clean reconstruction.
+\end{enumerate}
+
+In principle, this unifies classification and generation in a single energy-based framework.
+However, our experiments reveal a limitation: biases trained via denoising score matching achieve only $\sim$37\% classification accuracy (vs.\ 10\% random baseline).
+The potentials overlap significantly---some classes (e.g., ``1'') have broadly attractive basins that capture inputs from other classes.
+
+This occurs because score matching optimizes \emph{within-class} reconstruction, not \emph{between-class} discrimination.
+
+\subsection{Contrastive Learning: Derivation and Detailed Balance}
+
+For robust classification, the training objective should include a contrastive term that explicitly separates class energies:
+\begin{equation}
+L_{\rm contrastive} = \sum_k \left[ V_k(\mathbf{x}_k) - \frac{1}{K-1}\sum_{j \neq k} V_j(\mathbf{x}_k) \right],
+\label{eq:contrastive}
+\end{equation}
+where $\mathbf{x}_k$ denotes a sample from class $k$. This pushes the correct class energy $V_k(\mathbf{x}_k)$ down while pushing incorrect class energies $V_j(\mathbf{x}_k)$ up.
+
+\textbf{Learning rules from contrastive loss.}
+Consider our potential with shared couplings $J_{ij}$ and class-specific biases $\mathbf{b}_k$:
+\begin{equation}
+V_k(\mathbf{x}) = J_2 \|\mathbf{x}\|^2 + J_4 \|\mathbf{x}\|^4_4 + \mathbf{b}_k \cdot \mathbf{x} + \tfrac{1}{2}\mathbf{x}^\top J \mathbf{x}.
+\end{equation}
+Computing gradients of (\ref{eq:contrastive}):
+
+\emph{For shared couplings $J_{ij}$}: Since $\partial V_k / \partial J_{ij} = x_i x_j$ is independent of $k$, we have
+\begin{equation}
+\frac{\partial L_{\rm contrastive}}{\partial J_{ij}} = \sum_k \left[ x_{k,i} x_{k,j} - \frac{K-1}{K-1} x_{k,i} x_{k,j} \right] = 0.
+\end{equation}
+The contrastive loss \emph{does not affect} the shared couplings---the positive and negative terms cancel exactly.
+
+\emph{For class biases $\mathbf{b}_k$}: Since $\partial V_k / \partial b_{k,i} = x_i$ and $b_k$ only appears in $V_k$:
+\begin{align}
+\frac{\partial L_{\rm contrastive}}{\partial b_{k,i}} &= x_{k,i}, \label{eq:hebb_pos}\\
+\frac{\partial L_{\rm contrastive}}{\partial b_{j,i}} &= -\frac{x_{k,i}}{K-1} \quad (j \neq k). \label{eq:hebb_neg}
+\end{align}
+This yields a \textbf{Hebbian/anti-Hebbian learning rule}:
+\begin{align}
+\Delta b_{k,i} &\propto -x_{k,i} \quad \text{(pull correct class toward data)}, \\
+\Delta b_{j,i} &\propto +\frac{x_{k,i}}{K-1} \quad \text{(push incorrect classes away)}.
+\end{align}
+This is analogous to Hopfield learning with explicit negative examples, or the positive/negative phase of contrastive divergence.
+
+\textbf{Detailed balance in class space.}
+While Langevin dynamics provides detailed balance in \emph{configuration space} $\mathbf{x}$:
+\begin{equation}
+d\mathbf{x} = -\nabla V_k \, dt + \sqrt{2k_{\rm B}T}\, d\mathbf{W}, \quad p(\mathbf{x}|k) \propto e^{-V_k(\mathbf{x})/k_{\rm B}T},
+\end{equation}
+the contrastive objective provides detailed balance in \emph{class space}. Define
+\begin{equation}
+p(k|\mathbf{x}) = \frac{\exp(-V_k(\mathbf{x})/T)}{\sum_j \exp(-V_j(\mathbf{x})/T)},
+\label{eq:class_softmax}
+\end{equation}
+a Boltzmann distribution over discrete class labels. At low temperature $T \to 0$, this concentrates on $k^* = \arg\min_k V_k(\mathbf{x})$. The contrastive loss ensures this ``classification dynamics'' has the correct fixed point: data from class $k$ should flow to class $k$.
+
+\textbf{Joint distribution and RBM connection.}
+The class-conditional structure reveals a connection to Restricted Boltzmann Machines. Consider the joint distribution
+\begin{equation}
+p(\mathbf{x}, k) \propto \exp\left(-V_k(\mathbf{x})/k_{\rm B}T\right).
+\label{eq:joint}
+\end{equation}
+This treats $k$ as a \emph{one-hot hidden unit}---analogous to an RBM where the hidden layer has exactly one active unit selecting among $K$ energy functions. The marginal over $\mathbf{x}$ is
+\begin{equation}
+p(\mathbf{x}) = \sum_k p(\mathbf{x},k) \propto \sum_k \exp(-V_k(\mathbf{x})/k_{\rm B}T),
+\end{equation}
+creating an implicit mixture model without requiring explicit hidden-unit sampling during training.
+
+\textbf{Alternating dynamics.}
+The joint distribution (\ref{eq:joint}) suggests an alternating inference procedure satisfying detailed balance:
+\begin{enumerate}
+\item \emph{Langevin step in $\mathbf{x}$}: Given class $k$, evolve $\mathbf{x}$ under $-\nabla V_k$.
+\item \emph{Gibbs step in $k$}: Given $\mathbf{x}$, resample $k \sim p(k|\mathbf{x})$ via (\ref{eq:class_softmax}).
+\end{enumerate}
+This provides a principled way to jointly sample configurations and class labels, unifying generation and classification in a single thermodynamic framework.
+
+Figure~\ref{fig:biases} shows the learned class biases $-\mathbf{b}_k$, which function as attractor templates analogous to Hopfield stored patterns.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{class_biases.png}
+\caption{Learned class biases $-\mathbf{b}_k$ for digits 0--9. Red indicates pixels that the class ``wants'' to be positive (white), blue indicates pixels pulled toward negative (black). The biases resemble smoothed digit templates.}
+\label{fig:biases}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{contrastive_biases.png}
+\caption{Contrastive signal: $-b_k + \frac{1}{K-1}\sum_{j\neq k} b_j$ for each class. This shows what makes each digit \emph{unique}---the discriminative features that separate it from other classes. Note how digit 1 emphasizes the vertical stroke while suppressing surrounding regions.}
+\label{fig:contrastive}
+\end{figure}
+
+For now, the system excels at \emph{conditional} tasks (generation and denoising given the class label) rather than pure \emph{recognition}; contrastive fine-tuning to improve classification accuracy remains future work.
+Figure~\ref{fig:pipeline} illustrates the full pipeline, showing that denoising with the true class label (row 4) consistently outperforms denoising with the energy-predicted class (row 3).
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{full_pipeline.png}
+\caption{Full inference pipeline. Row 1: clean digits. Row 2: noisy inputs. Row 3: denoised using energy-predicted class $k^*$ (green = correct, red = incorrect prediction). Row 4: denoised using true class label. Classification accuracy is limited, but conditional denoising (row 4) is reliable.}
+\label{fig:pipeline}
+\end{figure}
+
+\subsection{Hardware Interpretation}
+The class-conditional structure maps directly to hardware: the reconfiguration fabric stores $K$ bias banks $\{\mathbf{b}_0, \ldots, \mathbf{b}_{K-1}\}$.
+Recognition requires evaluating $K$ energies, which can be done in parallel using $K$ copies of the gradient computation circuit, followed by a winner-take-all selection.
+Once $k^*$ is determined, the appropriate bank is loaded ($\sim$ns DAC settling), and the T-array relaxes to produce the output.
+This provides a physical implementation of content-addressable memory with learned attractors.
+
+\subsection{Quantum-Classical Correspondence}
+The Langevin dynamics in $d$ dimensions corresponds to a $(d{+}1)$-dimensional classical field theory, where time $t$ plays the role of an extra spatial dimension.
+The trajectory probability $P[x(t)] \propto \exp(-S[x])$ with Onsager-Machlup action $S = \int dt\, (\dot x + \nabla V)^2 / 4\mu k_{\rm B}T$ defines this higher-dimensional system.
+Operating p-bits at threshold (criticality) corresponds to the critical point of this $(d{+}1)$-dimensional theory, where temporal correlations become long-range and information propagates efficiently across the time dimension.
+
+\section{Derivations}
+Detailed derivations of gradient estimators, time-reversal likelihoods, and relaxation bounds will be provided in an expanded version.
+
+\end{document}
