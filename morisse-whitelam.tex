@@ -779,7 +779,7 @@ For robust classification, we need a \emph{discriminative} term that pushes cons
 
 The contrastive loss explicitly separates class energies:
 \begin{equation}
-L_{\rm contrastive} = \sum_k \left[ V_c(\mathbf{x}_c) - \frac{1}{K-1}\sum_{j \neq k} V_j(\mathbf{x}_c) \right],
+L_{\rm contrastive} = \sum_c \left[ V_c(\mathbf{x}_c) - \frac{1}{K-1}\sum_{j \neq c} V_j(\mathbf{x}_c) \right],
 \label{eq:contrastive}
 \end{equation}
 where $\mathbf{x}_c$ denotes a sample from class $c$. This pushes the correct class energy $V_c(\mathbf{x}_c)$ down while pushing incorrect class energies $V_j(\mathbf{x}_c)$ up.
@@ -791,23 +791,23 @@ V_c(\mathbf{x}) = J_2 \|\mathbf{x}\|^2 + J_4 \|\mathbf{x}\|^4_4 + \mathbf{b}_c \
 \end{equation}
 Computing gradients of (\ref{eq:contrastive}):
 
-\emph{For shared couplings $J_{ij}$}: Since $\partial V_c / \partial J_{ij} = x_i x_j$ is independent of $k$, we have
+\emph{For shared couplings $J_{ij}$}: Since $\partial V_c / \partial J_{ij} = x_i x_j$ is independent of class, we have
 \begin{equation}
-\frac{\partial L_{\rm contrastive}}{\partial J_{ij}} = \sum_k \left[ x_{c,i} x_{k,j} - \frac{K-1}{K-1} x_{c,i} x_{k,j} \right] = 0.
+\frac{\partial L_{\rm contrastive}}{\partial J_{ij}} = \sum_c \left[ x_{c,i} x_{c,j} - \frac{K-1}{K-1} x_{c,i} x_{c,j} \right] = 0.
 \end{equation}
 The contrastive loss \emph{does not affect} the shared couplings---the positive and negative terms cancel exactly.
 
 \emph{For class biases $\mathbf{b}_c$}: Since $\partial V_c / \partial b_{c,i} = x_i$ and $b_c$ only appears in $V_c$:
 \begin{align}
 \frac{\partial L_{\rm contrastive}}{\partial b_{c,i}} &= x_{c,i}, \label{eq:hebb_pos}\\
-\frac{\partial L_{\rm contrastive}}{\partial b_{j,i}} &= -\frac{x_{c,i}}{K-1} \quad (j \neq k). \label{eq:hebb_neg}
+\frac{\partial L_{\rm contrastive}}{\partial b_{j,i}} &= -\frac{x_{c,i}}{K-1} \quad (j \neq c). \label{eq:hebb_neg}
 \end{align}
 This yields a \textbf{Hebbian/anti-Hebbian learning rule}:
 \begin{align}
 \Delta b_{c,i} &\propto -x_{c,i} \quad \text{(pull correct class toward data)}, \\
 \Delta b_{j,i} &\propto +\frac{x_{c,i}}{K-1} \quad \text{(push incorrect classes away)}.
 \end{align}
-Geometrically: the correct-class constraint surface $\mathcal{C}_c$ is pulled toward the data point, while incorrect-class surfaces $\mathcal{C}_{j\neq k}$ are pushed away.
+Geometrically: the correct-class constraint surface $\mathcal{C}_c$ is pulled toward the data point, while incorrect-class surfaces $\mathcal{C}_{j\neq c}$ are pushed away.
 This is analogous to Hopfield learning with explicit negative examples, or the positive/negative phase of contrastive divergence.
 
 \textbf{Key insight:} The shared couplings $J_{ij}$ are invariant under contrastive learning (the positive and negative terms cancel).
@@ -817,11 +817,11 @@ This means trajectory action learning (for $J_{ij}$) and contrastive learning (f
 \textbf{Detailed balance in class space.}
 While Langevin dynamics provides detailed balance in \emph{configuration space} $\mathbf{x}$:
 \begin{equation}
-d\mathbf{x} = -\nabla V_c \, dt + \sqrt{2k_{\rm B}T}\, d\mathbf{W}, \quad p(\mathbf{x}|k) \propto e^{-V_c(\mathbf{x})/k_{\rm B}T},
+d\mathbf{x} = -\nabla V_c \, dt + \sqrt{2k_{\rm B}T}\, d\mathbf{W}, \quad p(\mathbf{x}|c) \propto e^{-V_c(\mathbf{x})/k_{\rm B}T},
 \end{equation}
 the contrastive objective provides detailed balance in \emph{class space}. Define
 \begin{equation}
-p(k|\mathbf{x}) = \frac{\exp(-V_c(\mathbf{x})/T)}{\sum_j \exp(-V_j(\mathbf{x})/T)},
+p(c|\mathbf{x}) = \frac{\exp(-V_c(\mathbf{x})/T)}{\sum_j \exp(-V_j(\mathbf{x})/T)},
 \label{eq:class_softmax}
 \end{equation}
 a Boltzmann distribution over discrete class labels. At low temperature $T \to 0$, this concentrates on $c^* = \arg\min_c V_c(\mathbf{x})$. The contrastive loss ensures this ``classification dynamics'' has the correct fixed point: data from class $c$ should flow to class $c$.
@@ -829,12 +829,12 @@ a Boltzmann distribution over discrete class labels. At low temperature $T \to 0
 \textbf{Joint distribution and RBM connection.}
 The class-conditional structure reveals a connection to Restricted Boltzmann Machines. Consider the joint distribution
 \begin{equation}
-p(\mathbf{x}, k) \propto \exp\left(-V_c(\mathbf{x})/k_{\rm B}T\right).
+p(\mathbf{x}, c) \propto \exp\left(-V_c(\mathbf{x})/k_{\rm B}T\right).
 \label{eq:joint}
 \end{equation}
-This treats $k$ as a \emph{one-hot hidden unit}---analogous to an RBM where the hidden layer has exactly one active unit selecting among $K$ energy functions. The marginal over $\mathbf{x}$ is
+This treats $c$ as a \emph{one-hot hidden unit}---analogous to an RBM where the hidden layer has exactly one active unit selecting among $K$ energy functions. The marginal over $\mathbf{x}$ is
 \begin{equation}
-p(\mathbf{x}) = \sum_k p(\mathbf{x},k) \propto \sum_k \exp(-V_c(\mathbf{x})/k_{\rm B}T),
+p(\mathbf{x}) = \sum_c p(\mathbf{x},c) \propto \sum_c \exp(-V_c(\mathbf{x})/k_{\rm B}T),
 \end{equation}
 creating an implicit mixture model without requiring explicit hidden-unit sampling during training.
 
@@ -842,12 +842,12 @@ creating an implicit mixture model without requiring explicit hidden-unit sampli
 The joint distribution (\ref{eq:joint}) suggests an alternating inference procedure satisfying detailed balance:
 \begin{enumerate}
 \item \emph{Langevin step in $\mathbf{x}$}: Given class $c$, evolve $\mathbf{x}$ under $-\nabla V_c$.
-\item \emph{Gibbs step in $k$}: Given $\mathbf{x}$, resample $k \sim p(k|\mathbf{x})$ via (\ref{eq:class_softmax}).
+\item \emph{Gibbs step in $c$}: Given $\mathbf{x}$, resample $c \sim p(c|\mathbf{x})$ via (\ref{eq:class_softmax}).
 \end{enumerate}
 This provides a principled way to jointly sample configurations and class labels, unifying generation and classification in a single thermodynamic framework.
 
 The learned class biases $-\mathbf{b}_c$ function as attractor templates analogous to Hopfield stored patterns, resembling smoothed digit templates where positive (negative) bias values attract pixels toward white (black).
-The contrastive signal $-b_c + \frac{1}{K-1}\sum_{j\neq k} b_j$ reveals what makes each digit \emph{unique}---the discriminative features that separate it from other classes.
+The contrastive signal $-b_c + \frac{1}{K-1}\sum_{j\neq c} b_j$ reveals what makes each digit \emph{unique}---the discriminative features that separate it from other classes.
 
 For now, the system excels at \emph{conditional} tasks (generation and denoising given the class label) rather than pure \emph{recognition}; contrastive fine-tuning to improve classification accuracy remains future work.
 
