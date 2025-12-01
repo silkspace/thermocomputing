@@ -649,15 +649,63 @@ The architecture supports several application domains:
 A single training update requires: (i) relaxation time $\sim\lambda_{\min}^{-1}$ for state equilibration, (ii) measurement and gradient computation, and (iii) DAC settling for parameter update.
 With MHz-scale p-bit dynamics and ns-scale DAC updates, the architecture supports $\sim$kHz--MHz update rates---online in the sense of per-sample updates, though not streaming real-time for high-bandwidth data.
 
+\section{Related Work}
+\label{sec:related}
+
+Our approach builds on several lines of research in energy-based learning, thermodynamic computing, and local learning rules.
+We clarify connections and distinctions to prior work.
+
+\textbf{Boltzmann machines and contrastive learning.}
+The Boltzmann machine~\cite{hinton1985boltzmann} introduced energy-based learning with a two-phase contrastive rule: compare ``clamped'' (data-driven) and ``free'' (model-driven) statistics.
+Restricted Boltzmann Machines~\cite{smolensky1986rbm} and Contrastive Divergence~\cite{hinton2002cd} made this practical by limiting connectivity and truncating MCMC chains.
+Our trajectory-based approach differs fundamentally: we observe \emph{finite-time dynamics} rather than equilibrium statistics, and gradients emerge from velocity residuals rather than state differences.
+
+\textbf{Equilibrium Propagation.}
+Scellier and Bengio~\cite{scellier2017ep} introduced Equilibrium Propagation (EP), showing that gradients in energy-based models can be computed by comparing two equilibria: a ``free'' fixed point and a ``nudged'' fixed point where outputs are weakly clamped to targets.
+The gradient formula $\partial L/\partial \theta \propto \lim_{\beta\to 0}(\text{state}_\text{nudged} - \text{state}_\text{free})/\beta$ requires the system to equilibrate twice per gradient.
+Recent work~\cite{wanjura2025quantumep} connects EP to Onsager reciprocal relations (1931)---the symmetry of linear response coefficients.
+
+Our approach uses a \emph{different} result from Onsager's work: the Onsager-Machlup functional~\cite{onsager1953fluctuations} (1953), which gives the probability density over stochastic trajectories.
+This yields single-pass learning without equilibration: we observe one trajectory and extract gradients from velocity residuals.
+Table~\ref{tab:ep_comparison} summarizes the distinctions.
+
+\begin{table}[h]
+\centering
+\caption{Comparison of Equilibrium Propagation and our trajectory-based approach.}
+\label{tab:ep_comparison}
+\small
+\begin{tabular}{lcc}
+\toprule
+& \textbf{Equilibrium Propagation} & \textbf{Ours (O-M Action)} \\
+\midrule
+Onsager foundation & Reciprocity (1931) & O-M Functional (1953) \\
+Core object & Linear response & Path probability \\
+Learning phases & Two (free + nudged) & One (observation) \\
+Equilibration & Required (×2) & Not required \\
+Gradient source & State difference & Velocity residuals \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Thermodynamic computing hardware.}
+P-bit arrays~\cite{camsari2017pbit,borders2019pbit} implement stochastic Ising machines for combinatorial optimization.
+Normal Computing's stochastic processing unit~\cite{aifer2024thermodynamic} performs linear algebra via equilibrium fluctuations.
+Extropic's thermodynamic sampling units use Josephson junctions for energy-based sampling~\cite{extropic2024tsu}.
+These systems focus on \emph{inference}; our contribution is closing the \emph{training} loop on-chip via trajectory-based gradients.
+
+\textbf{Score matching and diffusion models.}
+Denoising score matching~\cite{vincent2011dsm,song2019score} learns the score function $\nabla \log p(\mathbf{x})$ by matching denoising directions.
+Our velocity-matching interpretation (Section~\ref{sec:learning_rules}) connects to score matching: at equilibrium, $\nabla V / k_{\rm B}T = -\nabla \log p$.
+However, score matching optimizes local reconstruction without explicit trajectory likelihoods, while our Onsager-Machlup objective provides a global path-integral formulation with closed-form gradients.
+
+\textbf{Stochastic thermodynamics of learning.}
+Goldt and Seifert~\cite{goldt2017thermodynamics} analyzed learning through the lens of stochastic thermodynamics, showing that thermodynamic costs bound information acquisition.
+Our constraint-satisfaction interpretation complements this: correct parameters minimize the Onsager-Machlup action to its thermal floor, making learning a projection onto physical consistency rather than optimization over a loss landscape.
+
 \section{Discussion}
 
 The Criticality Engine exemplifies a new paradigm where training and inference are performed directly by nonequilibrium statistical dynamics, eliminating the need for digital simulation.
 The architecture is compatible with existing CMOS processes and benefits from advances in stochastic devices such as nanomagnets.
-
-\textbf{Relation to prior work.}
-The finite-time learning objective differs from classical Boltzmann machine training, which requires equilibrium sampling.
-Our approach shares motivation with equilibrium propagation but provides explicit hardware primitives rather than algorithmic recipes.
-Unlike inference-only thermodynamic accelerators (Ising machines, p-bit arrays for optimization), the Criticality Engine closes the training loop on-chip.
 
 \textbf{Limitations.}
 This paper presents an architecture; numerical validation on specific tasks remains future work.
@@ -912,5 +960,84 @@ The trajectory probability $P[\mathbf{x}(t)] \propto \exp(-S[\mathbf{x}])$ with 
 This correspondence illuminates why learning at criticality is efficient: operating p-bits at threshold corresponds to the critical point of the $(d{+}1)$-dimensional theory, where temporal correlations become long-range.
 The ``strong coupling in time'' allows information to propagate efficiently across the time dimension, meaning that each trajectory strongly constrains model parameters.
 This is the physical origin of the rapid convergence observed in Figure~\ref{fig:convergence}---criticality maximizes the information content per trajectory, and the constraint surface becomes maximally informative.
+
+\begin{thebibliography}{99}
+
+\bibitem{hinton1985boltzmann}
+D.~H. Ackley, G.~E. Hinton, and T.~J. Sejnowski,
+``A learning algorithm for Boltzmann machines,''
+\emph{Cognitive Science}, vol.~9, no.~1, pp.~147--169, 1985.
+
+\bibitem{smolensky1986rbm}
+P.~Smolensky,
+``Information processing in dynamical systems: Foundations of harmony theory,''
+in \emph{Parallel Distributed Processing}, vol.~1, ch.~6, pp.~194--281, MIT Press, 1986.
+
+\bibitem{hinton2002cd}
+G.~E. Hinton,
+``Training products of experts by minimizing contrastive divergence,''
+\emph{Neural Computation}, vol.~14, no.~8, pp.~1771--1800, 2002.
+
+\bibitem{scellier2017ep}
+B.~Scellier and Y.~Bengio,
+``Equilibrium propagation: Bridging the gap between energy-based models and backpropagation,''
+\emph{Frontiers in Computational Neuroscience}, vol.~11, p.~24, 2017.
+
+\bibitem{wanjura2025quantumep}
+C.~C. Wanjura, F.~Marquardt, \emph{et al.},
+``Quantum equilibrium propagation for efficient training of quantum systems based on Onsager reciprocity,''
+\emph{Nature Communications}, vol.~16, p.~6595, 2025.
+
+\bibitem{onsager1953fluctuations}
+L.~Onsager and S.~Machlup,
+``Fluctuations and irreversible processes,''
+\emph{Physical Review}, vol.~91, no.~6, pp.~1505--1512, 1953.
+
+\bibitem{camsari2017pbit}
+K.~Y. Camsari, R.~Faria, B.~M. Sutton, and S.~Datta,
+``Stochastic p-bits for invertible logic,''
+\emph{Physical Review X}, vol.~7, no.~3, p.~031014, 2017.
+
+\bibitem{borders2019pbit}
+W.~A. Borders, A.~Z. Pervaiz, S.~Fukami, K.~Y. Camsari, H.~Ohno, and S.~Datta,
+``Integer factorization using stochastic magnetic tunnel junctions,''
+\emph{Nature}, vol.~573, pp.~390--393, 2019.
+
+\bibitem{aifer2024thermodynamic}
+M.~Aifer, K.~Deng, G.~Kol, F.~Sheldon, and P.~Bhattacharya,
+``Thermodynamic computing system for AI applications,''
+\emph{Nature Communications}, vol.~16, p.~3474, 2025.
+
+\bibitem{extropic2024tsu}
+G.~Verdon, T.~McCourt, E.~Genin, \emph{et al.},
+``Thermodynamic computing: From zero to one,''
+Extropic Technical Report, 2024.
+
+\bibitem{vincent2011dsm}
+P.~Vincent,
+``A connection between score matching and denoising autoencoders,''
+\emph{Neural Computation}, vol.~23, no.~7, pp.~1661--1674, 2011.
+
+\bibitem{song2019score}
+Y.~Song and S.~Ermon,
+``Generative modeling by estimating gradients of the data distribution,''
+\emph{Advances in Neural Information Processing Systems}, vol.~32, 2019.
+
+\bibitem{goldt2017thermodynamics}
+S.~Goldt and U.~Seifert,
+``Stochastic thermodynamics of learning,''
+\emph{Physical Review Letters}, vol.~118, no.~1, p.~010601, 2017.
+
+\bibitem{hopfield1982neural}
+J.~J. Hopfield,
+``Neural networks and physical systems with emergent collective computational abilities,''
+\emph{Proceedings of the National Academy of Sciences}, vol.~79, no.~8, pp.~2554--2558, 1982.
+
+\bibitem{lecun2006ebm}
+Y.~LeCun, S.~Chopra, R.~Hadsell, M.~Ranzato, and F.~Huang,
+``A tutorial on energy-based learning,''
+in \emph{Predicting Structured Data}, MIT Press, 2006.
+
+\end{thebibliography}
 
 \end{document}
