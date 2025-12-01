@@ -29,3 +29,8 @@ archive/
 .idea/
 .vscode/
 *.swp
+
+# Local notes
+COMPARISON_EP.md
+HARDWARE_COMPARISON.md
+PLAN.md
