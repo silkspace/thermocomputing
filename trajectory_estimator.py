@@ -266,48 +266,8 @@ def create_mnist_estimator(image_size: int = 14) -> tuple[TrajectoryEstimator, C
     return estimator, diffusion
 
 
-def load_mnist_data(n_train: int = 5000, n_test: int = 1000, image_size: int = 14):
-    """
-    Load and preprocess MNIST with proper train/test split.
-
-    Returns:
-        X_train, y_train: Training set (first n_train samples)
-        X_test, y_test: Holdout test set (from end of dataset, never seen during training)
-    """
-    from sklearn.datasets import fetch_openml
-
-    print("Loading MNIST...")
-    mnist = fetch_openml('mnist_784', version=1, as_frame=False, parser='auto')
-    X = mnist.data.astype(np.float32) / 255.0
-    y = mnist.target.astype(np.int64)
-
-    # Use FIRST n_train for training, LAST n_test for testing (no overlap!)
-    # MNIST has 70000 samples, so taking last 1000 is safe holdout
-    train_indices = np.arange(n_train)
-    test_indices = np.arange(len(X) - n_test, len(X))
-
-    def downsample(X_subset):
-        n = len(X_subset)
-        X_full = X_subset.reshape(-1, 28, 28)
-        factor = 28 // image_size
-        X_down = np.zeros((n, image_size, image_size))
-        for i in range(image_size):
-            for j in range(image_size):
-                X_down[:, i, j] = X_full[:,
-                    i*factor:(i+1)*factor,
-                    j*factor:(j+1)*factor
-                ].mean(axis=(1, 2))
-        # Scale to [-1, 1]
-        return 2 * X_down.reshape(n, -1) - 1
-
-    X_train = downsample(X[train_indices])
-    y_train = y[train_indices]
-    X_test = downsample(X[test_indices])
-    y_test = y[test_indices]
-
-    print(f"Train: {len(X_train)}, Test: {len(X_test)} (holdout from end of dataset)")
-
-    return X_train, y_train, X_test, y_test
+# Data loading moved to utils.py for single source of truth
+from utils import load_mnist
 
 
 def train_from_trajectories(
@@ -452,7 +412,7 @@ def main():
     print("="*60)
 
     # Load data with proper train/test split
-    X_train, y_train, X_test, y_test = load_mnist_data(n_train=5000, n_test=1000, image_size=14)
+    X_train, y_train, X_test, y_test = load_mnist(n_train=5000, n_test=1000, image_size=14)
     print(f"Train shape: {X_train.shape}, Test shape: {X_test.shape}")
 
     # Create estimator and diffusion process

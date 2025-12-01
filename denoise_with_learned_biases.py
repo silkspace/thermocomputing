@@ -21,6 +21,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 
 from numpy.typing import NDArray
+from utils import load_digit_samples
 
 
 class PhiQuarticWithBias:
@@ -86,49 +87,6 @@ class PhiQuarticWithBias:
         grad = self.grad_V(x, class_idx)
         noise = np.sqrt(2 * self.kT * dt) * np.random.randn(*x.shape)
         return x - grad * dt + noise
-
-
-def load_digit_samples(
-    digit: int,
-    n_samples: int = 5,
-    image_size: int = 14
-) -> NDArray[np.floating]:
-    """
-    Load sample digits from MNIST.
-
-    Args:
-        digit: Digit class (0-9)
-        n_samples: Number of samples to load
-        image_size: Size to downsample to
-
-    Returns:
-        Array of shape (n_samples, image_size*image_size) scaled to [-1, 1]
-    """
-    from sklearn.datasets import fetch_openml
-
-    mnist = fetch_openml('mnist_784', version=1, as_frame=False, parser='auto')
-    X = mnist.data.astype(np.float32) / 255.0
-    y = mnist.target.astype(np.int64)
-
-    mask = (y == digit)
-    digit_images = X[mask][:n_samples]
-
-    # Downsample
-    X_reshaped = digit_images.reshape(-1, 28, 28)
-    factor = 28 // image_size
-    X_down = np.zeros((len(digit_images), image_size, image_size))
-
-    for i in range(image_size):
-        for j in range(image_size):
-            X_down[:, i, j] = X_reshaped[:,
-                i*factor:(i+1)*factor,
-                j*factor:(j+1)*factor
-            ].mean(axis=(1, 2))
-
-    # Scale to [-1, 1]
-    X_scaled = 2 * X_down.reshape(n_samples, -1) - 1
-
-    return X_scaled
 
 
 def denoise_trajectory(

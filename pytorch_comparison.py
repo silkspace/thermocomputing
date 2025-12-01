@@ -22,6 +22,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 from numpy.typing import NDArray
+from utils import load_mnist
 
 # Device selection
 if torch.backends.mps.is_available():
@@ -30,48 +31,6 @@ elif torch.cuda.is_available():
     DEVICE = torch.device("cuda")
 else:
     DEVICE = torch.device("cpu")
-
-
-def load_data(
-    image_size: int = 14
-) -> tuple[NDArray[np.float32], NDArray[np.int64], NDArray[np.float32], NDArray[np.int64]]:
-    """
-    Load MNIST with same preprocessing as trajectory_estimator.
-
-    Args:
-        image_size: Size to downsample images to (default 14x14)
-
-    Returns:
-        X_train, y_train, X_test, y_test as numpy arrays
-    """
-    from sklearn.datasets import fetch_openml
-
-    print("Loading MNIST...")
-    mnist = fetch_openml('mnist_784', version=1, as_frame=False, parser='auto')
-    X = mnist.data.astype(np.float32) / 255.0
-    y = mnist.target.astype(np.int64)
-
-    n_train, n_test = 5000, 1000
-
-    def downsample(X_subset: NDArray[np.float32]) -> NDArray[np.float32]:
-        n = len(X_subset)
-        X_full = X_subset.reshape(-1, 28, 28)
-        factor = 28 // image_size
-        X_down = np.zeros((n, image_size, image_size), dtype=np.float32)
-        for i in range(image_size):
-            for j in range(image_size):
-                X_down[:, i, j] = X_full[:,
-                    i*factor:(i+1)*factor,
-                    j*factor:(j+1)*factor
-                ].mean(axis=(1, 2))
-        return 2 * X_down.reshape(n, -1) - 1
-
-    X_train = downsample(X[:n_train])
-    y_train = y[:n_train]
-    X_test = downsample(X[-n_test:])
-    y_test = y[-n_test:]
-
-    return X_train, y_train, X_test, y_test
 
 
 def run_linear_baseline(
@@ -235,7 +194,7 @@ def main() -> None:
     print(f"Device: {DEVICE}")
     print("="*60)
 
-    X_train, y_train, X_test, y_test = load_data()
+    X_train, y_train, X_test, y_test = load_mnist()
     print(f"Train: {len(X_train)}, Test: {len(X_test)}")
 
     # Run comparisons
