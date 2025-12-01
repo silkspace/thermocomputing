@@ -322,8 +322,8 @@ def train_from_trajectories(
         epoch_action = 0.0
 
         # Accumulate gradients per class
-        grad_accum = np.zeros((10, n_dim))
-        class_counts = np.zeros(10)
+        grad_accum = np.zeros((estimator.n_classes, n_dim))
+        class_counts = np.zeros(estimator.n_classes)
 
         for idx in perm[:n_batch]:
             x = X_train[idx:idx+1]  # Shape: (1, n_dim)
@@ -360,7 +360,7 @@ def train_from_trajectories(
             epoch_action += action / n_steps  # Normalize by trajectory length
 
         # Update biases with averaged gradients
-        for c in range(10):
+        for c in range(estimator.n_classes):
             if class_counts[c] > 0:
                 avg_grad = grad_accum[c] / class_counts[c]
                 estimator.params.b[c] -= lr * avg_grad
@@ -411,7 +411,7 @@ def compute_accuracy(estimator: TrajectoryEstimator, X: np.ndarray, y: np.ndarra
 
     # Per-class accuracy
     per_class = {}
-    for c in range(10):
+    for c in range(estimator.n_classes):
         mask = (y == c)
         if mask.sum() > 0:
             per_class[c] = (predictions[mask] == c).mean() * 100
@@ -457,7 +457,7 @@ def main():
     print("\n--- Per-Class Test Accuracy ---")
     print("Digit | Accuracy | Count")
     print("-" * 30)
-    for c in range(10):
+    for c in range(estimator.n_classes):
         count = (y_test == c).sum()
         print(f"  {c}   |  {test_per_class[c]:5.1f}%  |  {count}")
 
@@ -472,13 +472,20 @@ def main():
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
 
-    fig, axes = plt.subplots(2, 5, figsize=(12, 5))
-    for c in range(10):
-        ax = axes[c // 5, c % 5]
+    n_classes = estimator.n_classes
+    n_cols = 5
+    n_rows = (n_classes + n_cols - 1) // n_cols
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(12, 2.5 * n_rows))
+    axes = axes.flatten()
+    for c in range(n_classes):
+        ax = axes[c]
         bias = -estimator.get_bias(c).reshape(14, 14)
         ax.imshow(bias, cmap='RdBu_r')
         ax.set_title(f'Class {c}')
         ax.axis('off')
+    # Hide unused axes
+    for c in range(n_classes, len(axes)):
+        axes[c].axis('off')
     plt.suptitle('Learned Biases (-b_c) via Trajectory Estimation', fontsize=12)
     plt.tight_layout()
     plt.savefig('paper_figures/trajectory_estimated_biases.png', dpi=150)

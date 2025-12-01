@@ -77,7 +77,8 @@ def run_pytorch_analytical(
     n_epochs: int = 100,
     lr: float = 0.05,
     samples_per_epoch: int = 500,
-    eval_train_samples: int = 1000
+    eval_train_samples: int = 1000,
+    n_classes: int = 10
 ) -> tuple[float, float]:
     """
     PyTorch implementation using the SAME analytical gradient formula
@@ -95,6 +96,7 @@ def run_pytorch_analytical(
         lr: Learning rate
         samples_per_epoch: Number of samples to process per epoch
         eval_train_samples: Number of train samples for accuracy evaluation
+        n_classes: Number of output classes
 
     Returns:
         (test_accuracy, elapsed_time) tuple
@@ -112,7 +114,7 @@ def run_pytorch_analytical(
     n_steps = 5
 
     # Learnable biases
-    b = torch.zeros(10, n_dim, device=DEVICE)
+    b = torch.zeros(n_classes, n_dim, device=DEVICE)
 
     def conservative_diffusion_step(x: torch.Tensor) -> torch.Tensor:
         H = W = 14
@@ -130,7 +132,7 @@ def run_pytorch_analytical(
 
     def classify(X: torch.Tensor) -> torch.Tensor:
         energies = []
-        for c in range(10):
+        for c in range(n_classes):
             V = J2 * (X ** 2).sum(dim=-1) + J4 * (X ** 4).sum(dim=-1)
             V = V + (b[c] * X).sum(dim=-1)
             energies.append(V)
@@ -143,8 +145,8 @@ def run_pytorch_analytical(
     for epoch in range(n_epochs):
         perm = torch.randperm(n_samples)[:n_batch]
 
-        grad_accum = torch.zeros(10, n_dim, device=DEVICE)
-        class_counts = torch.zeros(10, device=DEVICE)
+        grad_accum = torch.zeros(n_classes, n_dim, device=DEVICE)
+        class_counts = torch.zeros(n_classes, device=DEVICE)
 
         for idx in perm:
             x = X_train_t[idx:idx+1]
@@ -169,7 +171,7 @@ def run_pytorch_analytical(
             grad_accum[c] = grad_accum[c] + traj_grad
             class_counts[c] += 1
 
-        for c in range(10):
+        for c in range(n_classes):
             if class_counts[c] > 0:
                 b[c] -= lr * grad_accum[c] / class_counts[c]
 
