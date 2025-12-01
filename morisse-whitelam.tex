@@ -660,9 +660,9 @@ Our approach shares motivation with equilibrium propagation but provides explici
 Unlike inference-only thermodynamic accelerators (Ising machines, p-bit arrays for optimization), the Criticality Engine closes the training loop on-chip.
 
 \textbf{Limitations.}
-This paper presents an architecture; numerical validation on specific tasks remains future work.
 Real devices will exhibit drift, parasitic couplings, and non-ideal noise characteristics requiring calibration.
-The finite-time objective may not align with equilibrium properties for all tasks.
+The current MNIST demonstration uses 14$\times$14 downsampled images; scaling to larger state spaces requires investigation.
+Generation quality with couplings alone (without biases) produces structured but noisy outputs, suggesting that first-order and second-order structure play complementary roles.
 
 \textbf{Future directions.}
 Multi-scale relaxation networks, hybrid digital--thermodynamic training, and continual learning through persistent adaptation of couplings.
