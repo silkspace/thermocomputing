@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+
+# Generated files
+*.npy
+*.pkl
+*.pt
+
+# OS
+.DS_Store
+
+# Archive (internal development)
+archive/
+
+# LaTeX auxiliary
+*.aux
+*.log
+*.out
+*.toc
+*.bbl
+*.blg
+*.synctex.gz
+
+# IDE
+.idea/
+.vscode/
+*.swp
