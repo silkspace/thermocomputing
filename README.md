@@ -1,98 +1,75 @@
 # The Criticality Engine
 
-**Learning in thermodynamic systems via the Onsager-Machlup action.**
+**On-chip learning for thermodynamic computers via the Onsager-Machlup action.**
 
 ---
 
-## The Problem
+## What This Is
 
-Modern ML simulates physics on digital hardware. Neural networks, diffusion models, and energy-based models are discretizations of stochastic differential equations—yet we run them on GPUs using floating-point arithmetic, burning energy to *pretend* to be analog.
+Thermodynamic computers use physical fluctuations (thermal noise, stochastic switching) to perform computation. Devices like CMOS p-bits, nanomagnets, and analog relaxation circuits naturally implement Langevin dynamics—no simulation required.
 
-Thermodynamic computers—built from fluctuating devices like CMOS p-bits—naturally undergo the stochastic dynamics that digital systems struggle to simulate. The problem is training: no one has figured out how to learn parameters on-chip.
+**The problem**: existing thermodynamic hardware can do inference, but nobody has figured out how to *train* on-chip. Without learning, you're stuck with fixed models.
 
-## The Breakthrough
+**Our contribution**: We derive closed-form gradient estimators from the Onsager-Machlup action that enable fully local, on-chip learning. A thermodynamic computer can update its parameters by observing its own trajectories—no backpropagation, no external compute.
 
-Learning in thermodynamic systems is **constraint satisfaction, not optimization**.
+## The Core Idea
 
-The Onsager-Machlup action measures how well parameters explain observed trajectories. When parameters are correct, observed dynamics become maximally likely—not because we minimized a loss, but because we satisfied a physical constraint.
-
-**Gradient formulas fall out analytically:**
+The Onsager-Machlup action measures how well parameters explain observed dynamics. When parameters are correct, trajectories become maximally likely. This gives us analytical gradients:
 
 ```
-∂L/∂b_i  = residual_i / (2kT)
-∂L/∂J_ij = -(residual_i · x_j + residual_j · x_i) / (2kT)
+∂L/∂b_i  ∝  (observed velocity - predicted velocity)_i
+∂L/∂J_ij ∝  residual_i · x_j + residual_j · x_i
 ```
 
-Local measurements → local updates. No backpropagation. Hardware-friendly.
+These are **local**: each parameter update requires only measurements at neighboring nodes. No gradient tape. No chain rule. The physics gives you the gradient directly.
 
-## The Key Result
+## Hardware Architecture
 
-**78.8% accuracy on data where template matching completely fails.**
+The Criticality Engine architecture consists of:
 
-We use within-class centering to remove all first-order (mean) information:
+1. **T-array**: Grid of stochastic nodes undergoing Langevin dynamics
+2. **Measurement plane**: Samples node states at each timestep
+3. **Local statistics layer**: Computes velocity residuals from consecutive samples
+4. **Gradient engine**: Applies the O-M formulas to get parameter updates
+5. **Reconfiguration fabric**: Updates couplings J_ij and biases b_i via DACs
 
-```
-Nearest Centroid (raw data):     81.9%
-Nearest Centroid (centered):      9.4%  ← random chance, means removed
-Coupling Learning (centered):    78.8%  ← genuine second-order structure!
-```
+**Learning happens in N clock cycles** per trajectory observation. No iterative optimization—just measure, compute residual, update. The hardware naturally performs gradient descent by observing its own thermal fluctuations.
 
-This proves the method learns **correlations between pixels**, not just templates.
+## Simulation Validation
 
-## How It Works
+We validate the gradient formulas by simulating thermodynamic dynamics on MNIST:
 
-### Thermal Pixel Exchanges
+- **Thermal pixel exchanges** model mass-conserving Kawasaki dynamics
+- **Trajectory observation** extracts gradients via Eq. 12
+- **Within-class centering** proves we learn correlations, not just templates
 
-We observe mass-conserving dynamics where pixels exchange intensity (Kawasaki-like):
-
-```
-x_i → x_i - δ,   x_j → x_j + δ
-```
-
-Correlated pixels (both bright or both dark) produce different exchange statistics than uncorrelated pixels. The coupling gradient extracts this structure.
-
-### The Full Potential
-
-```
-V_c(x) = J₂||x||² + J₄||x||⁴ + b_c·x + ½x^T J_c x
-         ─────────────────────  ─────   ──────────
-         φ⁴ bistability         bias    couplings
-                               (1st order) (2nd order)
-```
-
-- **Biases** encode class templates (where attractors are)
-- **Couplings** encode correlations (how pixels vary together)
-
-## Quick Start
+The simulation confirms the formulas work: parameters converge, classification improves, and learned couplings capture genuine structure. This is a proof of concept—the real target is physical hardware where these dynamics happen naturally.
 
 ```bash
+# Run the simulation
 uv sync
-
-# Run coupling learning (main experiment)
 uv run python learn_couplings.py
-
-# Generate digits with learned model
-uv run python learn_couplings.py --reconstruct
 ```
 
 ## Repository Structure
 
 ```
-├── learn_couplings.py          # Main implementation
-├── utils.py                    # Data loading
-├── morisse-whitelam.tex/pdf    # Full paper
-├── paper_figures/              # Generated figures
-└── archive/                    # Old experiments
+├── learn_couplings.py          # Simulation of thermal dynamics + learning
+├── morisse-whitelam.tex/pdf    # Full paper with theory + hardware design
+├── HARDWARE_COMPARISON.md      # Comparison with Equilibrium Propagation
+├── PLAN.md                     # Research roadmap
+└── paper_figures/              # Generated visualizations
 ```
 
 ## The Paper
 
-Full theory in `morisse-whitelam.pdf`:
+`morisse-whitelam.pdf` contains:
 
-- Onsager-Machlup action as trajectory likelihood
-- Local gradient estimators for b_i and J_ij
-- Hardware architecture for thermodynamic computers
-- Learning as constraint satisfaction
+- Derivation of gradient estimators from Onsager-Machlup action
+- Hardware architecture blueprint (T-array, measurement plane, gradient engine)
+- CMOS implementation using p-bits at threshold
+- Comparison to Equilibrium Propagation and Boltzmann machines
+- Learning as constraint satisfaction (not optimization)
 
 ## Citation
 
@@ -106,4 +83,4 @@ Full theory in `morisse-whitelam.pdf`:
 
 ---
 
-*Learning from thermal noise, not fighting it.*
+*The next generation of AI might run on thermal noise—if we can figure out how to train it.*
