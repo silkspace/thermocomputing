@@ -12,20 +12,36 @@ Process:
 4. Watch digit converge to clean version
 """
 
+from __future__ import annotations
+
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from pathlib import Path
 
+from numpy.typing import NDArray
+
 
 class PhiQuarticWithBias:
     """φ⁴ + bias potential with learned class-specific biases."""
 
-    def __init__(self, biases: np.ndarray, J2: float = -2.0, J4: float = 1.0, kT: float = 0.3, bias_scale: float = 1.0):
+    def __init__(
+        self,
+        biases: NDArray[np.floating],
+        J2: float = -2.0,
+        J4: float = 1.0,
+        kT: float = 0.3,
+        bias_scale: float = 1.0
+    ) -> None:
         """
+        Initialize the φ⁴ + bias potential.
+
         Args:
             biases: Shape (n_classes, n_dim), learned biases for each class
+            J2: Quadratic coefficient (negative for bistability)
+            J4: Quartic coefficient (positive for boundedness)
+            kT: Temperature
             bias_scale: Scale factor for biases (increase for stronger attraction)
         """
         self.biases = biases * bias_scale
@@ -33,19 +49,61 @@ class PhiQuarticWithBias:
         self.J4 = J4
         self.kT = kT
 
-    def grad_V(self, x: np.ndarray, class_idx: int) -> np.ndarray:
-        """∂V/∂x = 2J₂x + 4J₄x³ + b_c"""
+    def grad_V(self, x: NDArray[np.floating], class_idx: int) -> NDArray[np.floating]:
+        """
+        Compute gradient of potential.
+
+        ∂V/∂x = 2J₂x + 4J₄x³ + b_c
+
+        Args:
+            x: State vector
+            class_idx: Class index for bias selection
+
+        Returns:
+            Gradient of V with respect to x
+        """
         return 2 * self.J2 * x + 4 * self.J4 * (x ** 3) + self.biases[class_idx]
 
-    def langevin_step(self, x: np.ndarray, class_idx: int, dt: float = 0.05) -> np.ndarray:
-        """One Langevin step: dx = -∇V·dt + √(2kT·dt)·η"""
+    def langevin_step(
+        self,
+        x: NDArray[np.floating],
+        class_idx: int,
+        dt: float = 0.05
+    ) -> NDArray[np.floating]:
+        """
+        One Langevin dynamics step.
+
+        dx = -∇V·dt + √(2kT·dt)·η
+
+        Args:
+            x: Current state
+            class_idx: Class index for potential
+            dt: Time step
+
+        Returns:
+            Updated state after one Langevin step
+        """
         grad = self.grad_V(x, class_idx)
         noise = np.sqrt(2 * self.kT * dt) * np.random.randn(*x.shape)
         return x - grad * dt + noise
 
 
-def load_digit_samples(digit: int, n_samples: int = 5, image_size: int = 14):
-    """Load sample digits from MNIST."""
+def load_digit_samples(
+    digit: int,
+    n_samples: int = 5,
+    image_size: int = 14
+) -> NDArray[np.floating]:
+    """
+    Load sample digits from MNIST.
+
+    Args:
+        digit: Digit class (0-9)
+        n_samples: Number of samples to load
+        image_size: Size to downsample to
+
+    Returns:
+        Array of shape (n_samples, image_size*image_size) scaled to [-1, 1]
+    """
     from sklearn.datasets import fetch_openml
 
     mnist = fetch_openml('mnist_784', version=1, as_frame=False, parser='auto')
@@ -73,9 +131,27 @@ def load_digit_samples(digit: int, n_samples: int = 5, image_size: int = 14):
     return X_scaled
 
 
-def denoise_trajectory(model, x_init, class_idx, n_steps=100, dt=0.05):
-    """Run Langevin dynamics to denoise."""
-    trajectory = [x_init.copy()]
+def denoise_trajectory(
+    model: PhiQuarticWithBias,
+    x_init: NDArray[np.floating],
+    class_idx: int,
+    n_steps: int = 100,
+    dt: float = 0.05
+) -> list[NDArray[np.floating]]:
+    """
+    Run Langevin dynamics to denoise.
+
+    Args:
+        model: The φ⁴ + bias potential
+        x_init: Initial (noisy) state
+        class_idx: Target class for denoising
+        n_steps: Number of Langevin steps
+        dt: Time step size
+
+    Returns:
+        List of states forming the denoising trajectory
+    """
+    trajectory: list[NDArray[np.floating]] = [x_init.copy()]
     x = x_init.copy()
 
     for _ in range(n_steps):
@@ -85,7 +161,8 @@ def denoise_trajectory(model, x_init, class_idx, n_steps=100, dt=0.05):
     return trajectory
 
 
-def main():
+def main() -> None:
+    """Generate denoising demo figures using learned biases."""
     image_size = 14
     n_dim = image_size * image_size
 
@@ -96,7 +173,7 @@ def main():
         from trajectory_estimator import main as train_main
         train_main()
 
-    biases = np.load('learned_biases.npy')
+    biases: NDArray[np.floating] = np.load('learned_biases.npy')
     print(f"Loaded biases shape: {biases.shape}")
 
     # Create model for denoising (moderate bias)

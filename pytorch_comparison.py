@@ -12,12 +12,16 @@ Usage:
     python pytorch_comparison.py
 """
 
+from __future__ import annotations
+
 import time
 import torch
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+
+from numpy.typing import NDArray
 
 # Device selection
 if torch.backends.mps.is_available():
@@ -28,8 +32,18 @@ else:
     DEVICE = torch.device("cpu")
 
 
-def load_data(image_size=14):
-    """Load MNIST with same preprocessing as trajectory_estimator."""
+def load_data(
+    image_size: int = 14
+) -> tuple[NDArray[np.float32], NDArray[np.int64], NDArray[np.float32], NDArray[np.int64]]:
+    """
+    Load MNIST with same preprocessing as trajectory_estimator.
+
+    Args:
+        image_size: Size to downsample images to (default 14x14)
+
+    Returns:
+        X_train, y_train, X_test, y_test as numpy arrays
+    """
     from sklearn.datasets import fetch_openml
 
     print("Loading MNIST...")
@@ -39,11 +53,11 @@ def load_data(image_size=14):
 
     n_train, n_test = 5000, 1000
 
-    def downsample(X_subset):
+    def downsample(X_subset: NDArray[np.float32]) -> NDArray[np.float32]:
         n = len(X_subset)
         X_full = X_subset.reshape(-1, 28, 28)
         factor = 28 // image_size
-        X_down = np.zeros((n, image_size, image_size))
+        X_down = np.zeros((n, image_size, image_size), dtype=np.float32)
         for i in range(image_size):
             for j in range(image_size):
                 X_down[:, i, j] = X_full[:,
@@ -60,8 +74,24 @@ def load_data(image_size=14):
     return X_train, y_train, X_test, y_test
 
 
-def run_linear_baseline(X_train, y_train, X_test, y_test):
-    """Simple linear classifier baseline."""
+def run_linear_baseline(
+    X_train: NDArray[np.float32],
+    y_train: NDArray[np.int64],
+    X_test: NDArray[np.float32],
+    y_test: NDArray[np.int64]
+) -> tuple[float, float]:
+    """
+    Simple linear classifier baseline.
+
+    Args:
+        X_train: Training features
+        y_train: Training labels
+        X_test: Test features
+        y_test: Test labels
+
+    Returns:
+        (test_accuracy, elapsed_time) tuple
+    """
     from sklearn.linear_model import LogisticRegression
 
     print("\n=== Linear Classifier (LogisticRegression) ===")
@@ -80,13 +110,31 @@ def run_linear_baseline(X_train, y_train, X_test, y_test):
     return test_acc, elapsed
 
 
-def run_pytorch_analytical(X_train, y_train, X_test, y_test, n_epochs=100, lr=0.05):
+def run_pytorch_analytical(
+    X_train: NDArray[np.float32],
+    y_train: NDArray[np.int64],
+    X_test: NDArray[np.float32],
+    y_test: NDArray[np.int64],
+    n_epochs: int = 100,
+    lr: float = 0.05
+) -> tuple[float, float]:
     """
     PyTorch implementation using the SAME analytical gradient formula
     as trajectory_estimator.py.
 
     This shows PyTorch can achieve the same result - it's not about PyTorch vs NumPy,
     it's about the analytical gradient formula being correct.
+
+    Args:
+        X_train: Training features
+        y_train: Training labels
+        X_test: Test features
+        y_test: Test labels
+        n_epochs: Number of training epochs
+        lr: Learning rate
+
+    Returns:
+        (test_accuracy, elapsed_time) tuple
     """
     print("\n=== PyTorch (Analytical Gradients, same formula) ===")
 
@@ -103,7 +151,7 @@ def run_pytorch_analytical(X_train, y_train, X_test, y_test, n_epochs=100, lr=0.
     # Learnable biases
     b = torch.zeros(10, n_dim, device=DEVICE)
 
-    def conservative_diffusion_step(x):
+    def conservative_diffusion_step(x: torch.Tensor) -> torch.Tensor:
         H = W = 14
         batch = x.shape[0]
         x_img = x.reshape(batch, H, W)
@@ -117,7 +165,7 @@ def run_pytorch_analytical(X_train, y_train, X_test, y_test, n_epochs=100, lr=0.
         x_new = x_img + 0.1 * laplacian + 0.1 * noise
         return x_new.reshape(batch, -1)
 
-    def classify(X):
+    def classify(X: torch.Tensor) -> torch.Tensor:
         energies = []
         for c in range(10):
             V = J2 * (X ** 2).sum(dim=-1) + J4 * (X ** 4).sum(dim=-1)
@@ -180,7 +228,8 @@ def run_pytorch_analytical(X_train, y_train, X_test, y_test, n_epochs=100, lr=0.
     return test_acc, elapsed
 
 
-def main():
+def main() -> None:
+    """Run comparison between trajectory estimation and standard ML baselines."""
     print("="*60)
     print("COMPARISON: Trajectory Estimation vs Standard ML")
     print(f"Device: {DEVICE}")
@@ -190,7 +239,7 @@ def main():
     print(f"Train: {len(X_train)}, Test: {len(X_test)}")
 
     # Run comparisons
-    results = {}
+    results: dict[str, tuple[float, float]] = {}
 
     # 1. Linear baseline
     acc1, time1 = run_linear_baseline(X_train, y_train, X_test, y_test)
