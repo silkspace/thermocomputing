@@ -33,11 +33,14 @@ Isaac Tamblyn$^{3,\ddagger}$
 
 \begin{abstract}
 We introduce the \emph{Criticality Engine}, a computational architecture that performs both inference and online learning by exploiting the intrinsic stochastic dynamics of thermodynamic systems.
-The key theoretical insight is that learning in such systems is \emph{constraint satisfaction}, not optimization: the Onsager-Machlup action $S[\mathbf{x}(t)] = \int (\dot{\mathbf{x}} + \nabla V)^2 dt / 4\mu k_{\rm B}T$ measures trajectory likelihood, and as noise decreases, probability concentrates on least-action paths while competing trajectories are exponentially suppressed.
-Temperature acts as a Lagrangian multiplier controlling constraint tightness, and forward-backward trajectory symmetry (detailed balance) provides additional constraints that accelerate convergence.
-This perspective explains why trajectory-based learning is fast: we demonstrate $>$99\% parameter recovery in 10--20 epochs on synthetic tasks, and 76\% MNIST classification accuracy on a holdout test set after a single epoch---compared to thousands of epochs typical in conventional neural network training.
-CMOS p-bits biased at threshold naturally implement these dynamics in hardware, and the learning rules decompose into local operations suitable for on-chip gradient estimation.
-We present a hardware blueprint with measurement plane, local statistics layer, and dual-bank reconfiguration fabric, establishing a route toward trainable thermodynamic neural computers with potential for significant energy reduction.
+The core idea is simple: we want parameters such that running the system \emph{backward} from noise reconstructs data.
+Detailed balance provides a shortcut---maximizing the likelihood of observed \emph{forward} trajectories automatically maximizes backward (reconstructive) likelihood.
+This yields closed-form gradient estimators: $\partial L/\partial b_i = \text{residual}_i / 2k_{\rm B}T$, where the residual is the mismatch between observed and model-predicted velocities.
+Unlike Equilibrium Propagation, which requires two equilibration phases (free and nudged), our approach needs only \emph{single-pass observation} of trajectories---no equilibration, no nudging, no negative-phase sampling.
+The Onsager-Machlup action provides theoretical grounding, revealing that learning is \emph{constraint satisfaction}: correct parameters minimize trajectory action to its thermal floor.
+We demonstrate 76\% MNIST classification accuracy after a single epoch and $>$99\% parameter recovery in 10--20 epochs---fast convergence because each trajectory directly constrains parameters rather than requiring iterative search.
+CMOS p-bits biased at threshold naturally implement these dynamics, and the local gradient formulas enable fully on-chip learning.
+We present a hardware blueprint establishing a route toward trainable thermodynamic neural computers.
 \end{abstract}
 
 \section{Introduction}
@@ -52,12 +55,14 @@ Existing thermodynamic hardware accelerators (e.g., p-bit arrays and continuous-
 However, no current architecture supports \emph{training} on-chip---the ability to estimate gradients of task-specific objectives and modify physical couplings accordingly.
 
 In this work we propose the \emph{Criticality Engine}, an architecture designed to close this gap.
-The key insight is twofold.
-First, CMOS p-bits biased at threshold are inherently critical: the probability $p(s_i=1) = \sigma(h_i)$ realizes Gibbs sampling in physics, not simulation.
-Second, and more fundamentally, learning in such systems is \emph{constraint satisfaction}, not optimization.
-The Onsager-Machlup action functional measures how well model parameters explain observed trajectories; correct parameters minimize the action, making observed dynamics maximally likely relative to competing paths.
-Temperature acts as a Lagrangian multiplier, and forward-backward symmetry (detailed balance) provides additional constraints.
-This perspective explains why trajectory-based learning converges rapidly---in 10--20 epochs rather than thousands---because projecting onto a constraint surface is geometrically simpler than searching a high-dimensional loss landscape.
+The core idea is direct: we seek parameters such that running the system \emph{backward} from noise reconstructs data.
+Detailed balance provides a crucial shortcut---maximizing the likelihood of observed forward trajectories automatically maximizes backward (reconstructive) likelihood---yielding closed-form gradient estimators from single-pass trajectory observation.
+This differs fundamentally from Equilibrium Propagation~\cite{scellier2017ep}, which requires two equilibration phases, and from Boltzmann machines, which require negative-phase sampling.
+We need neither: just observe the trajectory, compute the velocity residual, and update.
+
+The Onsager-Machlup action~\cite{onsager1953fluctuations} provides theoretical grounding for why this works.
+Learning becomes \emph{constraint satisfaction}: correct parameters minimize trajectory action to its thermal floor, making observed dynamics maximally likely.
+This explains the rapid convergence---10--20 epochs rather than thousands---because projecting onto a constraint surface is geometrically simpler than searching a high-dimensional loss landscape.
 
 \textbf{Contributions.}
 (i) A finite-time trajectory likelihood objective for thermodynamic arrays that yields closed-form gradients from local statistics.
