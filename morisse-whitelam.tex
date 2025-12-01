@@ -660,9 +660,9 @@ Our approach shares motivation with equilibrium propagation but provides explici
 Unlike inference-only thermodynamic accelerators (Ising machines, p-bit arrays for optimization), the Criticality Engine closes the training loop on-chip.
 
 \textbf{Limitations.}
-This paper presents an architecture; numerical validation on specific tasks remains future work.
 Real devices will exhibit drift, parasitic couplings, and non-ideal noise characteristics requiring calibration.
-The finite-time objective may not align with equilibrium properties for all tasks.
+The current MNIST demonstration uses 14$\times$14 downsampled images; scaling to larger state spaces requires investigation.
+Generation quality with couplings alone (without biases) produces structured but noisy outputs, suggesting that first-order and second-order structure play complementary roles.
 
 \textbf{Future directions.}
 Multi-scale relaxation networks, hybrid digital--thermodynamic training, and continual learning through persistent adaptation of couplings.
@@ -912,5 +912,84 @@ The trajectory probability $P[\mathbf{x}(t)] \propto \exp(-S[\mathbf{x}])$ with 
 This correspondence illuminates why learning at criticality is efficient: operating p-bits at threshold corresponds to the critical point of the $(d{+}1)$-dimensional theory, where temporal correlations become long-range.
 The ``strong coupling in time'' allows information to propagate efficiently across the time dimension, meaning that each trajectory strongly constrains model parameters.
 This is the physical origin of the rapid convergence observed in Figure~\ref{fig:convergence}---criticality maximizes the information content per trajectory, and the constraint surface becomes maximally informative.
+
+\begin{thebibliography}{99}
+
+\bibitem{hinton1985boltzmann}
+D.~H. Ackley, G.~E. Hinton, and T.~J. Sejnowski,
+``A learning algorithm for Boltzmann machines,''
+\emph{Cognitive Science}, vol.~9, no.~1, pp.~147--169, 1985.
+
+\bibitem{smolensky1986rbm}
+P.~Smolensky,
+``Information processing in dynamical systems: Foundations of harmony theory,''
+in \emph{Parallel Distributed Processing}, vol.~1, ch.~6, pp.~194--281, MIT Press, 1986.
+
+\bibitem{hinton2002cd}
+G.~E. Hinton,
+``Training products of experts by minimizing contrastive divergence,''
+\emph{Neural Computation}, vol.~14, no.~8, pp.~1771--1800, 2002.
+
+\bibitem{scellier2017ep}
+B.~Scellier and Y.~Bengio,
+``Equilibrium propagation: Bridging the gap between energy-based models and backpropagation,''
+\emph{Frontiers in Computational Neuroscience}, vol.~11, p.~24, 2017.
+
+\bibitem{wanjura2025quantumep}
+C.~C. Wanjura, F.~Marquardt, \emph{et al.},
+``Quantum equilibrium propagation for efficient training of quantum systems based on Onsager reciprocity,''
+\emph{Nature Communications}, vol.~16, p.~6595, 2025.
+
+\bibitem{onsager1953fluctuations}
+L.~Onsager and S.~Machlup,
+``Fluctuations and irreversible processes,''
+\emph{Physical Review}, vol.~91, no.~6, pp.~1505--1512, 1953.
+
+\bibitem{camsari2017pbit}
+K.~Y. Camsari, R.~Faria, B.~M. Sutton, and S.~Datta,
+``Stochastic p-bits for invertible logic,''
+\emph{Physical Review X}, vol.~7, no.~3, p.~031014, 2017.
+
+\bibitem{borders2019pbit}
+W.~A. Borders, A.~Z. Pervaiz, S.~Fukami, K.~Y. Camsari, H.~Ohno, and S.~Datta,
+``Integer factorization using stochastic magnetic tunnel junctions,''
+\emph{Nature}, vol.~573, pp.~390--393, 2019.
+
+\bibitem{aifer2024thermodynamic}
+M.~Aifer, K.~Deng, G.~Kol, F.~Sheldon, and P.~Bhattacharya,
+``Thermodynamic computing system for AI applications,''
+\emph{Nature Communications}, vol.~16, p.~3474, 2025.
+
+\bibitem{extropic2024tsu}
+G.~Verdon, T.~McCourt, E.~Genin, \emph{et al.},
+``Thermodynamic computing: From zero to one,''
+Extropic Technical Report, 2024.
+
+\bibitem{vincent2011dsm}
+P.~Vincent,
+``A connection between score matching and denoising autoencoders,''
+\emph{Neural Computation}, vol.~23, no.~7, pp.~1661--1674, 2011.
+
+\bibitem{song2019score}
+Y.~Song and S.~Ermon,
+``Generative modeling by estimating gradients of the data distribution,''
+\emph{Advances in Neural Information Processing Systems}, vol.~32, 2019.
+
+\bibitem{goldt2017thermodynamics}
+S.~Goldt and U.~Seifert,
+``Stochastic thermodynamics of learning,''
+\emph{Physical Review Letters}, vol.~118, no.~1, p.~010601, 2017.
+
+\bibitem{hopfield1982neural}
+J.~J. Hopfield,
+``Neural networks and physical systems with emergent collective computational abilities,''
+\emph{Proceedings of the National Academy of Sciences}, vol.~79, no.~8, pp.~2554--2558, 1982.
+
+\bibitem{lecun2006ebm}
+Y.~LeCun, S.~Chopra, R.~Hadsell, M.~Ranzato, and F.~Huang,
+``A tutorial on energy-based learning,''
+in \emph{Predicting Structured Data}, MIT Press, 2006.
+
+\end{thebibliography}
 
 \end{document}
