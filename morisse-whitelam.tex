@@ -691,7 +691,11 @@ Gradient source & State difference & Velocity residuals \\
 P-bit arrays~\cite{camsari2017pbit,borders2019pbit} implement stochastic Ising machines for combinatorial optimization.
 Normal Computing's stochastic processing unit~\cite{aifer2024thermodynamic} performs linear algebra via equilibrium fluctuations.
 Extropic's thermodynamic sampling units use Josephson junctions for energy-based sampling~\cite{extropic2024tsu}.
-These systems focus on \emph{inference}; our contribution is closing the \emph{training} loop on-chip via trajectory-based gradients.
+
+\textbf{Training and generation in thermodynamic systems.}
+Whitelam~\cite{whitelam2025training} showed that thermodynamic computers can be trained via gradient descent using a teacher-student framework, reporting potential energy advantages of seven orders of magnitude.
+The same author introduced generative thermodynamic computing~\cite{whitelam2025generative}, where structured data emerges from noise through Langevin dynamics without external neural networks.
+Our work complements these approaches by providing closed-form gradient estimators derived from the Onsager-Machlup action, enabling fully local on-chip learning without teacher networks.
 
 \textbf{Score matching and diffusion models.}
 Denoising score matching~\cite{vincent2011dsm,song2019score} learns the score function $\nabla \log p(\mathbf{x})$ by matching denoising directions.
@@ -1012,6 +1016,16 @@ M.~Aifer, K.~Deng, G.~Kol, F.~Sheldon, and P.~Bhattacharya,
 G.~Verdon, T.~McCourt, E.~Genin, \emph{et al.},
 ``Thermodynamic computing: From zero to one,''
 Extropic Technical Report, 2024.
+
+\bibitem{whitelam2025training}
+S.~Whitelam,
+``Training thermodynamic computers by gradient descent,''
+arXiv:2509.15324, 2025.
+
+\bibitem{whitelam2025generative}
+S.~Whitelam,
+``Generative thermodynamic computing,''
+arXiv:2506.15121, 2025.
 
 \bibitem{vincent2011dsm}
 P.~Vincent,
