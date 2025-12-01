@@ -123,9 +123,9 @@ The `archive/` folder contains old experiments that used:
 ## Citation
 
 ```bibtex
-@article{morisse2024criticality,
+@article{morisse2025criticality,
   title={The Criticality Engine: Online Learning in Thermodynamic Neural Computers},
   author={Morisse, Alexander and Whitelam, Stephen},
-  year={2024}
+  year={2025}
 }
 ```
