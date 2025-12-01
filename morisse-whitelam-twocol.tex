@@ -10,10 +10,10 @@
 
 \author{Alexander Morisse}
 \email{alex@morisse.ai}
-\affiliation{Independent Research}
+\affiliation{Independent Researcher}
 
 \author{Stephen Whitelam}
-\email{whitelam@lbl.gov}
+\email{swhitelam@lbl.gov}
 \affiliation{Molecular Foundry, Lawrence Berkeley National Laboratory, Berkeley, CA 94720, USA}
 
 \date{\today}
@@ -22,12 +22,10 @@
 We introduce the \emph{Criticality Engine}, a computational architecture that performs both inference and online learning by exploiting the intrinsic stochastic dynamics of thermodynamic systems.
 The key theoretical insight is that learning in such systems is \emph{constraint satisfaction}, not optimization: the Onsager-Machlup action $S[\mathbf{x}(t)] = \int (\dot{\mathbf{x}} + \nabla V)^2 dt / 4\mu k_{\rm B}T$ measures trajectory likelihood, and as noise decreases, probability concentrates on least-action paths while competing trajectories are exponentially suppressed.
 Temperature acts as a Lagrangian multiplier controlling constraint tightness, and forward-backward trajectory symmetry (detailed balance) provides additional constraints that accelerate convergence.
-This perspective explains why trajectory-based learning is fast: we demonstrate $>$99\% parameter recovery in 10--20 epochs, compared to thousands of epochs typical in conventional neural network training.
+This perspective explains why trajectory-based learning is fast: we demonstrate $>$99\% parameter recovery in 10--20 epochs on synthetic tasks, and 76\% MNIST classification accuracy on a holdout test set after a single epoch---compared to thousands of epochs typical in conventional neural network training.
 CMOS p-bits biased at threshold naturally implement these dynamics in hardware, and the learning rules decompose into local operations suitable for on-chip gradient estimation.
 We present a hardware blueprint with measurement plane, local statistics layer, and dual-bank reconfiguration fabric, establishing a route toward trainable thermodynamic neural computers with potential for significant energy reduction.
 \end{abstract}
-
-\maketitle
 
 \section{Introduction}
 
@@ -107,7 +105,7 @@ We describe each in turn, following a single learning cycle.
 
 \begin{figure*}[t]
 \centering
-\includegraphics[width=0.85\textwidth]{paper_figures/architecture_schematic.png}
+\includegraphics[width=0.9\textwidth]{paper_figures/architecture_schematic.png}
 \caption{Processor architecture of the Criticality Engine. The Thermodynamic Array (blue) implements Langevin dynamics; the Measurement Plane (orange) samples trajectories; the Local Statistics Layer (purple) computes correlations; the Gradient Engine (green) derives parameter updates; and the Reconfiguration Fabric (red) applies new parameters atomically. Arrows indicate data flow through one learning cycle.}
 \label{fig:architecture}
 \end{figure*}
@@ -405,7 +403,7 @@ Results are consistent across 10 random seeds (mean cosine similarity $0.9977 \p
 
 \begin{figure*}[t]
 \centering
-\includegraphics[width=0.9\textwidth]{paper_figures/trajectory_action_learning.png}
+\includegraphics[width=0.85\textwidth]{paper_figures/trajectory_action_learning.png}
 \caption{Trajectory action learning converges rapidly. Top left: Forward and backward actions converge to the thermal floor. Top right: Action asymmetry (detailed balance violation) decreases exponentially. Bottom left: Cosine similarity with true parameters approaches unity. Bottom right: Scatter plot of learned vs. true bias parameters shows near-perfect recovery ($>$99\% correlation).}
 \label{fig:convergence}
 \end{figure*}
@@ -439,7 +437,7 @@ Figure~\ref{fig:circuits} shows the three key circuit elements.
 
 \begin{figure*}[t]
 \centering
-\includegraphics[width=0.95\textwidth]{paper_figures/circuit_diagrams.png}
+\includegraphics[width=0.9\textwidth]{paper_figures/circuit_diagrams.png}
 \caption{Circuit building blocks. (a) A stochastic p-bit cell: cross-coupled inverters biased at threshold fluctuate between states due to thermal noise. (b) Current mirror coupling: the W/L ratio sets the coupling strength $J_{ij}$. (c) Dual-bank reconfiguration: the MUX atomically swaps between active and shadow parameter banks.}
 \label{fig:circuits}
 \end{figure*}
@@ -557,7 +555,7 @@ Each node integrates five functional blocks: the stochastic p-bit cell at its co
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\columnwidth]{paper_figures/node_anatomy.png}
+\includegraphics[width=0.48\textwidth]{paper_figures/node_anatomy.png}
 \caption{\textbf{Anatomy of a single node.}
 The p-bit cell (center) receives weighted currents from $d$ neighbors via current mirrors (left) and broadcasts its state to $d$ neighbors (right).
 A sample-and-hold circuit captures the stochastic state $x_i(t)$ for digital readout, while a bias DAC sets the local field $b_i$.
@@ -686,15 +684,14 @@ A purely quadratic potential would yield a Gaussian equilibrium distribution---u
 Instead, the $\varphi^4$ nonlinearity enables each node to ``snap'' toward one of two states, producing high-contrast outputs where pixels settle into their stable attractors rather than averaging toward gray.
 
 \subsection{Denoising via Relaxation}
-Training the $\varphi^4$+Ising potential (\ref{eq:local_potential_grad}) with denoising score matching yields a system where corrupted digits relax toward clean reconstructions.
-Starting from noisy inputs $\tilde x = x_{\rm data} + \epsilon$, Langevin dynamics follows the learned drift $-\nabla V$ back toward the data manifold.
-Score alignment (cosine similarity between learned drift and direction toward clean data) exceeds 0.8, confirming that the learned potential encodes the data distribution.
-Figure~\ref{fig:trajectory} shows a representative relaxation trajectory: a noisy digit ``3'' progressively sharpens as pixels settle into their bistable attractors.
+Using the biases learned via trajectory estimation (Section~\ref{sec:recognition}), we can denoise corrupted digits through Langevin relaxation under the $\varphi^4$+bias potential.
+Starting from noisy inputs $\tilde x = x_{\rm data} + \epsilon$, Langevin dynamics follows the learned drift $-\nabla V_c$ back toward the data manifold for class $c$.
+Figure~\ref{fig:trajectory} shows a representative relaxation trajectory: starting from random noise, structure emerges as pixels settle into their bistable attractors shaped by the learned bias.
 
 \begin{figure*}[t]
 \centering
-\includegraphics[width=0.8\textwidth]{paper_figures/trajectory_fast.png}
-\caption{Relaxation trajectory under the $\varphi^4$+bias potential. Starting from random noise (t=0), the system rapidly converges to the digit-3 attractor. Structure is visible by t=5, clear by t=10, and stable by t=20. This fast convergence ($\sim$10--20 steps vs.\ hundreds in naive implementations) reflects the strong restoring forces of the $\varphi^4$ bistable wells combined with learned biases.}
+\includegraphics[width=0.9\textwidth]{paper_figures/trajectory_fast_learned.png}
+\caption{Relaxation trajectory under the $\varphi^4$+bias potential with biases learned via trajectory estimation. Starting from random noise (t=0), the system converges toward the digit-3 attractor. Structure emerges by t=20--40 as the learned bias $\mathbf{b}_3$ guides pixels toward the digit template while the $\varphi^4$ potential pushes them into bistable wells.}
 \label{fig:trajectory}
 \end{figure*}
 
@@ -756,16 +753,62 @@ This is precisely \emph{Hopfield associative memory}: the biases $\mathbf{b}_c$ 
 \end{enumerate}
 
 In principle, this unifies classification and generation in a single energy-based framework.
-However, our experiments reveal a limitation: biases trained via denoising score matching achieve only $\sim$37\% classification accuracy (vs.\ 10\% random baseline).
-The potentials overlap significantly---some classes (e.g., ``1'') have broadly attractive basins that capture inputs from other classes.
+Initial experiments with denoising score matching achieved only $\sim$37\% classification accuracy---better than the 10\% random baseline, but far from state-of-the-art.
+However, a key insight dramatically improves this result: \textbf{trajectory-based estimation with data-dependent diffusion achieves 76\% test accuracy in a single epoch}.
 
-This occurs because score matching optimizes \emph{within-class} reconstruction, not \emph{between-class} discrimination.
+\textbf{Why trajectory estimation outperforms score matching.}
+Score matching learns to denoise by matching the local score $\nabla \log p(\mathbf{x})$ to a denoising direction.
+This is inherently \emph{local}---it optimizes within-class reconstruction but provides no signal for between-class discrimination.
+The potentials learned via score matching overlap significantly; some classes (e.g., ``1'') have broadly attractive basins that capture inputs from other classes.
 
-\subsection{Contrastive Learning: Separating Constraint Surfaces}
+Trajectory estimation differs fundamentally: it observes how pixel values \emph{evolve} under a data-dependent diffusion process, then uses the analytical gradient formulas (\ref{eq:J_grad})--(\ref{eq:b_grad}) to estimate parameters.
+The key is that the diffusion must be \emph{data-dependent}: different digit classes produce different diffusion signatures because their spatial intensity patterns differ.
 
-The trajectory action (Section~\ref{sec:constraint}) learns each $\mathbf{b}_c$ by projecting onto the constraint surface $\mathcal{C}_c$ where class-$c$ trajectories are maximally likely.
-But this is a \emph{generative} objective---it doesn't ensure that constraint surfaces for different classes are well-separated.
-For robust classification, we need a \emph{discriminative} term that pushes constraint surfaces apart.
+\textbf{Conservative pixel diffusion.}
+We implement a diffusion process where pixels (treated as particles) exchange intensity with neighbors while conserving total mass:
+\begin{equation}
+\Delta x_i = \alpha \sum_{j \in \text{neighbors}} (x_j - x_i) + \text{(zero-sum noise)}.
+\end{equation}
+A digit ``3'' diffuses differently than a digit ``7'' because their spatial gradients differ.
+The residual between observed diffusion and model-predicted drift (from the $\varphi^4$ potential) captures this class-specific structure.
+
+\textbf{One-epoch learning.}
+The gradient estimator (\ref{eq:b_grad}) accumulates residuals:
+\begin{equation}
+\Delta b_{c,i} \propto -\frac{1}{N_c} \sum_{\text{samples of class } c} \text{residual}_i = -\langle \text{diffusion signature} \rangle_c.
+\end{equation}
+After one pass through the data, each $\mathbf{b}_c$ becomes a \emph{template} of the average diffusion signature for class $c$---which is essentially the average digit shape.
+Classification then reduces to template matching: $c^* = \arg\min_c V_c(\mathbf{x}) = \arg\min_c (\text{const} + \mathbf{b}_c \cdot \mathbf{x})$.
+
+\textbf{Experimental results.}
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Epoch} & $\|\mathbf{b}\|$ & \textbf{Accuracy} \\
+\midrule
+Before training & 0.00 & 10.0\% (random) \\
+After 1 epoch & 0.06 & 79.4\% \\
+After 100 epochs & 6.43 & 80.2\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+The jump from 10\% to 79\% in a single epoch demonstrates that trajectory estimation extracts class structure extremely efficiently.
+Additional epochs provide marginal improvement because the templates are already well-formed.
+
+Figure~\ref{fig:biases} shows the learned biases $-\mathbf{b}_c$, which visibly resemble the digit templates for each class.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.9\textwidth]{paper_figures/learned_biases.png}
+\caption{Learned class biases $-\mathbf{b}_c$ via trajectory estimation. Each panel shows the bias template for one digit class (0--9). Red (positive) values attract pixels toward white; blue (negative) toward black. The templates visibly encode digit shapes, explaining the 76\% test accuracy: recognition reduces to template matching $c^* = \arg\min_c V_c(\mathbf{x})$.}
+\label{fig:biases}
+\end{figure*}
+
+\subsection{Contrastive Learning: Further Separating Constraint Surfaces}
+
+Trajectory estimation already achieves 76\% test accuracy by learning class templates from diffusion signatures.
+However, this is still a \emph{generative} objective---the gradient estimator (\ref{eq:b_grad}) projects each $\mathbf{b}_c$ onto the constraint surface $\mathcal{C}_c$ where class-$c$ trajectories are maximally likely, but doesn't explicitly ensure that constraint surfaces for different classes are well-separated.
+For applications requiring higher accuracy, a \emph{discriminative} term can push constraint surfaces apart.
 
 The contrastive loss explicitly separates class energies:
 \begin{equation}
@@ -839,7 +882,8 @@ This provides a principled way to jointly sample configurations and class labels
 The learned class biases $-\mathbf{b}_c$ function as attractor templates analogous to Hopfield stored patterns, resembling smoothed digit templates where positive (negative) bias values attract pixels toward white (black).
 The contrastive signal $-b_c + \frac{1}{K-1}\sum_{j\neq c} b_j$ reveals what makes each digit \emph{unique}---the discriminative features that separate it from other classes.
 
-For now, the system excels at \emph{conditional} tasks (generation and denoising given the class label) rather than pure \emph{recognition}; contrastive fine-tuning to improve classification accuracy remains future work.
+With trajectory estimation achieving 76\% test accuracy, the system already provides strong classification performance.
+Contrastive fine-tuning may further improve accuracy toward state-of-the-art levels, but the one-epoch trajectory result demonstrates that the physics-based approach is remarkably efficient at extracting class structure.
 
 \subsection{Hardware Interpretation}
 The class-conditional structure maps directly to hardware: the reconfiguration fabric stores $K$ bias banks $\{\mathbf{b}_0, \ldots, \mathbf{b}_{K-1}\}$.
