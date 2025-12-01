@@ -277,7 +277,9 @@ def train_from_trajectories(
     y_train: np.ndarray,
     n_steps: int = 20,
     lr: float = 0.01,
-    n_epochs: int = 50
+    n_epochs: int = 50,
+    samples_per_epoch: int = 500,
+    eval_samples: int = 500
 ) -> dict:
     """
     Train parameters by observing diffusion trajectories.
@@ -287,19 +289,33 @@ def train_from_trajectories(
     2. Diffuse for n_steps (observe trajectory)
     3. Accumulate gradients over trajectory
     4. Update parameters once per sample (averaged gradient)
+
+    Args:
+        estimator: TrajectoryEstimator to train
+        diffusion: DiffusionProcess for generating trajectories
+        X_train: Training data
+        y_train: Training labels
+        n_steps: Number of diffusion steps per trajectory
+        lr: Learning rate
+        n_epochs: Number of training epochs
+        samples_per_epoch: Number of samples to process per epoch
+        eval_samples: Number of samples to use for accuracy evaluation
     """
     n_samples = len(X_train)
     n_dim = X_train.shape[1]
     history = {'epoch': [], 'action': [], 'bias_norm': [], 'accuracy': []}
 
     # Check accuracy BEFORE any training
+    n_eval = min(eval_samples, n_samples)
     correct = 0
-    for i in range(min(500, n_samples)):
+    for i in range(n_eval):
         pred = classify_by_energy(estimator, X_train[i])
         if pred == y_train[i]:
             correct += 1
-    acc_before = correct / min(500, n_samples) * 100
+    acc_before = correct / n_eval * 100
     print(f"BEFORE TRAINING: ||b||={np.linalg.norm(estimator.params.b):.4f}, Acc={acc_before:.1f}%")
+
+    n_batch = min(samples_per_epoch, n_samples)
 
     for epoch in range(n_epochs):
         perm = np.random.permutation(n_samples)
@@ -309,7 +325,7 @@ def train_from_trajectories(
         grad_accum = np.zeros((10, n_dim))
         class_counts = np.zeros(10)
 
-        for idx in perm[:500]:  # Subsample for speed
+        for idx in perm[:n_batch]:
             x = X_train[idx:idx+1]  # Shape: (1, n_dim)
             c = int(y_train[idx])
 
@@ -349,18 +365,18 @@ def train_from_trajectories(
                 avg_grad = grad_accum[c] / class_counts[c]
                 estimator.params.b[c] -= lr * avg_grad
 
-        epoch_action /= 500
+        epoch_action /= n_batch
 
         # Track metrics
         bias_norm = np.linalg.norm(estimator.params.b)
 
         # Compute accuracy
         correct = 0
-        for i in range(min(500, n_samples)):
+        for i in range(n_eval):
             pred = classify_by_energy(estimator, X_train[i])
             if pred == y_train[i]:
                 correct += 1
-        acc = correct / min(500, n_samples) * 100
+        acc = correct / n_eval * 100
 
         history['epoch'].append(epoch)
         history['action'].append(epoch_action)
@@ -431,7 +447,8 @@ def main():
     print("="*60)
 
     test_acc, test_per_class, _ = compute_accuracy(estimator, X_test, y_test)
-    train_acc, train_per_class, _ = compute_accuracy(estimator, X_train[:1000], y_train[:1000])
+    eval_train_samples = min(1000, len(X_train))
+    train_acc, train_per_class, _ = compute_accuracy(estimator, X_train[:eval_train_samples], y_train[:eval_train_samples])
 
     print(f"\nTrain Accuracy: {train_acc:.1f}%")
     print(f"Test Accuracy:  {test_acc:.1f}% (HOLDOUT - never seen during training)")

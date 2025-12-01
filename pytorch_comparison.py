@@ -75,7 +75,9 @@ def run_pytorch_analytical(
     X_test: NDArray[np.float32],
     y_test: NDArray[np.int64],
     n_epochs: int = 100,
-    lr: float = 0.05
+    lr: float = 0.05,
+    samples_per_epoch: int = 500,
+    eval_train_samples: int = 1000
 ) -> tuple[float, float]:
     """
     PyTorch implementation using the SAME analytical gradient formula
@@ -91,6 +93,8 @@ def run_pytorch_analytical(
         y_test: Test labels
         n_epochs: Number of training epochs
         lr: Learning rate
+        samples_per_epoch: Number of samples to process per epoch
+        eval_train_samples: Number of train samples for accuracy evaluation
 
     Returns:
         (test_accuracy, elapsed_time) tuple
@@ -134,9 +138,10 @@ def run_pytorch_analytical(
 
     start = time.time()
     n_samples = len(X_train_t)
+    n_batch = min(samples_per_epoch, n_samples)
 
     for epoch in range(n_epochs):
-        perm = torch.randperm(n_samples)[:500]
+        perm = torch.randperm(n_samples)[:n_batch]
 
         grad_accum = torch.zeros(10, n_dim, device=DEVICE)
         class_counts = torch.zeros(10, device=DEVICE)
@@ -175,9 +180,10 @@ def run_pytorch_analytical(
 
     elapsed = time.time() - start
 
-    preds_train = classify(X_train_t[:1000])
+    n_eval = min(eval_train_samples, len(X_train_t))
+    preds_train = classify(X_train_t[:n_eval])
     preds_test = classify(X_test_t)
-    train_acc = (preds_train == y_train_t[:1000]).float().mean().item() * 100
+    train_acc = (preds_train == y_train_t[:n_eval]).float().mean().item() * 100
     test_acc = (preds_test == y_test_t).float().mean().item() * 100
 
     print(f"\nTrain Accuracy: {train_acc:.1f}%")
