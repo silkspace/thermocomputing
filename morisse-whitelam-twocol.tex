@@ -10,7 +10,7 @@
 
 \author{Alexander Morisse}
 \email{alex@morisse.ai}
-\affiliation{Independent Researcher}
+\affiliation{CXO, TensorML.com}
 
 \author{Stephen Whitelam}
 \email{swhitelam@lbl.gov}
@@ -24,37 +24,43 @@
 
 \begin{abstract}
 We introduce the \emph{Criticality Engine}, a computational architecture that performs both inference and online learning by exploiting the intrinsic stochastic dynamics of thermodynamic systems.
-The key theoretical insight is that learning in such systems is \emph{constraint satisfaction}, not optimization: the Onsager-Machlup action $S[\mathbf{x}(t)] = \int (\dot{\mathbf{x}} + \nabla V)^2 dt / 4\mu k_{\rm B}T$ measures trajectory likelihood, and as noise decreases, probability concentrates on least-action paths while competing trajectories are exponentially suppressed.
-Temperature acts as a Lagrangian multiplier controlling constraint tightness, and forward-backward trajectory symmetry (detailed balance) provides additional constraints that accelerate convergence.
-This perspective explains why trajectory-based learning is fast: we demonstrate $>$99\% parameter recovery in 10--20 epochs on synthetic tasks, and 76\% MNIST classification accuracy on a holdout test set after a single epoch---compared to thousands of epochs typical in conventional neural network training.
-CMOS p-bits biased at threshold naturally implement these dynamics in hardware, and the learning rules decompose into local operations suitable for on-chip gradient estimation.
-We present a hardware blueprint with measurement plane, local statistics layer, and dual-bank reconfiguration fabric, establishing a route toward trainable thermodynamic neural computers with potential for significant energy reduction.
+The core idea is simple: we want parameters such that running the system \emph{backward} from noise reconstructs data.
+Detailed balance provides a shortcut---maximizing the likelihood of observed \emph{forward} trajectories automatically maximizes backward (reconstructive) likelihood.
+This yields closed-form gradient estimators for both biases $b_i$ and couplings $J_{ij}$, where the gradients depend on the mismatch between observed and model-predicted velocities.
+Unlike Equilibrium Propagation, which requires two equilibration phases (free and nudged), our approach needs only \emph{single-pass observation} of trajectories---no equilibration, no nudging, no negative-phase sampling.
+The Onsager-Machlup action provides theoretical grounding, revealing that learning is \emph{constraint satisfaction}: correct parameters minimize trajectory action to its thermal floor.
+We demonstrate that coupling learning captures \emph{genuine second-order structure}: on within-class centered MNIST data (where nearest-centroid classification achieves only 9.4\%, equivalent to random guessing), learned couplings achieve 78.8\% accuracy---proving the method extracts correlational structure beyond simple templates.
+We also show $>$99\% parameter recovery in 10--20 epochs---fast convergence because each trajectory directly constrains parameters rather than requiring iterative search.
+CMOS p-bits biased at threshold naturally implement these dynamics, and the local gradient formulas enable fully on-chip learning.
+We present a hardware blueprint establishing a route toward trainable thermodynamic neural computers.
 \end{abstract}
 
 \section{Introduction}
 
-Modern machine learning systems rely on the numerical simulation of dynamical processes. 
-Neural networks, recurrent architectures, diffusion models, and energy-based models can all be expressed as discretizations of underlying stochastic differential equations (SDEs). 
-Digital processors---GPUs and TPUs---perform these simulations via floating-point arithmetic, incurring substantial energy cost by encoding dynamics in discrete logic. 
+Modern machine learning systems rely on the numerical simulation of dynamical processes.
+Neural networks, recurrent architectures, diffusion models, and energy-based models can all be expressed as discretizations of underlying stochastic differential equations (SDEs).
+Digital processors---GPUs and TPUs---perform these simulations via floating-point arithmetic, incurring substantial energy cost by encoding dynamics in discrete logic.
 An alternative paradigm is to realize the dynamics directly in hardware: a \emph{thermodynamic computer}.
 
-Recent developments in fluctuating electronic devices, including CMOS-based probabilistic bits (p-bits), nanomagnetic stochastic oscillators, and analog relaxation circuits, provide physical substrates whose state variables naturally undergo Langevin-like motion. 
-Existing thermodynamic hardware accelerators (e.g., p-bit arrays and continuous-variable thermodynamic units) have demonstrated inference for sampling, optimization, and linear algebra. 
+Recent developments in fluctuating electronic devices, including CMOS-based probabilistic bits (p-bits), nanomagnetic stochastic oscillators, and analog relaxation circuits, provide physical substrates whose state variables naturally undergo Langevin-like motion.
+Existing thermodynamic hardware accelerators (e.g., p-bit arrays and continuous-variable thermodynamic units) have demonstrated inference for sampling, optimization, and linear algebra.
 However, no current architecture supports \emph{training} on-chip---the ability to estimate gradients of task-specific objectives and modify physical couplings accordingly.
 
 In this work we propose the \emph{Criticality Engine}, an architecture designed to close this gap.
-The key insight is twofold.
-First, CMOS p-bits biased at threshold are inherently critical: the probability $p(s_i=1) = \sigma(h_i)$ realizes Gibbs sampling in physics, not simulation.
-Second, and more fundamentally, learning in such systems is \emph{constraint satisfaction}, not optimization.
-The Onsager-Machlup action functional measures how well model parameters explain observed trajectories; correct parameters minimize the action, making observed dynamics maximally likely relative to competing paths.
-Temperature acts as a Lagrangian multiplier, and forward-backward symmetry (detailed balance) provides additional constraints.
-This perspective explains why trajectory-based learning converges rapidly---in 10--20 epochs rather than thousands---because projecting onto a constraint surface is geometrically simpler than searching a high-dimensional loss landscape.
+The core idea is direct: we seek parameters such that running the system \emph{backward} from noise reconstructs data.
+Detailed balance provides a crucial shortcut---maximizing the likelihood of observed forward trajectories automatically maximizes backward (reconstructive) likelihood---yielding closed-form gradient estimators from single-pass trajectory observation.
+This differs fundamentally from Equilibrium Propagation~\cite{scellier2017ep}, which requires two equilibration phases, and from Boltzmann machines, which require negative-phase sampling.
+We need neither: just observe the trajectory, compute the velocity residual, and update.
+
+The Onsager-Machlup action~\cite{onsager1953fluctuations} provides theoretical grounding for why this works.
+Learning becomes \emph{constraint satisfaction}: correct parameters minimize trajectory action to its thermal floor, making observed dynamics maximally likely.
+This explains the rapid convergence---10--20 epochs rather than thousands---because projecting onto a constraint surface is geometrically simpler than searching a high-dimensional loss landscape.
 
 \textbf{Contributions.}
 (i) A finite-time trajectory likelihood objective for thermodynamic arrays that yields closed-form gradients from local statistics.
 (ii) Gradient estimators for biases $b_i$ and couplings $J_{ij}$ requiring only local state increments and neighbor values---suitable for on-chip implementation.
 (iii) A full-chip blueprint with measurement plane, local statistics layer, gradient engine, and dual-bank reconfiguration fabric.
-(iv) Initial empirical validation on synthetic parameter recovery and MNIST reconstruction, demonstrating rapid convergence.
+(iv) Empirical validation showing that coupling learning captures genuine second-order structure: 78.8\% accuracy on centered MNIST data where nearest-centroid classification achieves only 9.4\%.
 
 Section~\ref{sec:model} introduces the physical model; Section~\ref{sec:architecture} describes the processor architecture; Section~\ref{sec:learning_rules} derives the local gradient estimators; Section~\ref{sec:constraint} interprets learning as constraint satisfaction via the Onsager-Machlup action; Section~\ref{sec:hardware} maps the architecture to CMOS.
 
@@ -640,20 +646,72 @@ The architecture supports several application domains:
 A single training update requires: (i) relaxation time $\sim\lambda_{\min}^{-1}$ for state equilibration, (ii) measurement and gradient computation, and (iii) DAC settling for parameter update.
 With MHz-scale p-bit dynamics and ns-scale DAC updates, the architecture supports $\sim$kHz--MHz update rates---online in the sense of per-sample updates, though not streaming real-time for high-bandwidth data.
 
+\section{Related Work}
+\label{sec:related}
+
+Our approach builds on several lines of research in energy-based learning, thermodynamic computing, and local learning rules.
+We clarify connections and distinctions to prior work.
+
+\textbf{Boltzmann machines and contrastive learning.}
+The Boltzmann machine~\cite{hinton1985boltzmann} introduced energy-based learning with a two-phase contrastive rule: compare ``clamped'' (data-driven) and ``free'' (model-driven) statistics.
+Restricted Boltzmann Machines~\cite{smolensky1986rbm} and Contrastive Divergence~\cite{hinton2002cd} made this practical by limiting connectivity and truncating MCMC chains.
+Our trajectory-based approach differs fundamentally: we observe \emph{finite-time dynamics} rather than equilibrium statistics, and gradients emerge from velocity residuals rather than state differences.
+
+\textbf{Equilibrium Propagation.}
+Scellier and Bengio~\cite{scellier2017ep} introduced Equilibrium Propagation (EP), showing that gradients in energy-based models can be computed by comparing two equilibria: a ``free'' fixed point and a ``nudged'' fixed point where outputs are weakly clamped to targets.
+The gradient formula $\partial L/\partial \theta \propto \lim_{\beta\to 0}(\text{state}_\text{nudged} - \text{state}_\text{free})/\beta$ requires the system to equilibrate twice per gradient.
+Recent work~\cite{wanjura2025quantumep} connects EP to Onsager reciprocal relations (1931)---the symmetry of linear response coefficients.
+
+Our approach uses a \emph{different} result from Onsager's work: the Onsager-Machlup functional~\cite{onsager1953fluctuations} (1953), which gives the probability density over stochastic trajectories.
+This yields single-pass learning without equilibration: we observe one trajectory and extract gradients from velocity residuals.
+Table~\ref{tab:ep_comparison} summarizes the distinctions.
+
+\begin{table}[h]
+\centering
+\caption{Comparison of Equilibrium Propagation and our trajectory-based approach.}
+\label{tab:ep_comparison}
+\small
+\begin{tabular}{lcc}
+\toprule
+& \textbf{Equilibrium Propagation} & \textbf{Ours (O-M Action)} \\
+\midrule
+Onsager foundation & Reciprocity (1931) & O-M Functional (1953) \\
+Core object & Linear response & Path probability \\
+Learning phases & Two (free + nudged) & One (observation) \\
+Equilibration & Required ($\times$2) & Not required \\
+Gradient source & State difference & Velocity residuals \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Thermodynamic computing hardware.}
+P-bit arrays~\cite{camsari2017pbit,borders2019pbit} implement stochastic Ising machines for combinatorial optimization.
+Normal Computing's stochastic processing unit~\cite{aifer2024thermodynamic} performs linear algebra via equilibrium fluctuations.
+Extropic's thermodynamic sampling units use Josephson junctions for energy-based sampling~\cite{extropic2024tsu}.
+
+\textbf{Training and generation in thermodynamic systems.}
+Whitelam~\cite{whitelam2025training} showed that thermodynamic computers can be trained via gradient descent using a teacher-student framework, reporting potential energy advantages of seven orders of magnitude.
+The same author introduced generative thermodynamic computing~\cite{whitelam2025generative}, where structured data emerges from noise through Langevin dynamics without external neural networks.
+Our work complements these approaches by providing closed-form gradient estimators derived from the Onsager-Machlup action, enabling fully local on-chip learning without teacher networks.
+
+\textbf{Score matching and diffusion models.}
+Denoising score matching~\cite{vincent2011dsm,song2019score} learns the score function $\nabla \log p(\mathbf{x})$ by matching denoising directions.
+Our velocity-matching interpretation (Section~\ref{sec:learning_rules}) connects to score matching: at equilibrium, $\nabla V / k_{\rm B}T = -\nabla \log p$.
+However, score matching optimizes local reconstruction without explicit trajectory likelihoods, while our Onsager-Machlup objective provides a global path-integral formulation with closed-form gradients.
+
+\textbf{Stochastic thermodynamics of learning.}
+Goldt and Seifert~\cite{goldt2017thermodynamics} analyzed learning through the lens of stochastic thermodynamics, showing that thermodynamic costs bound information acquisition.
+Our constraint-satisfaction interpretation complements this: correct parameters minimize the Onsager-Machlup action to its thermal floor, making learning a projection onto physical consistency rather than optimization over a loss landscape.
+
 \section{Discussion}
 
 The Criticality Engine exemplifies a new paradigm where training and inference are performed directly by nonequilibrium statistical dynamics, eliminating the need for digital simulation.
 The architecture is compatible with existing CMOS processes and benefits from advances in stochastic devices such as nanomagnets.
 
-\textbf{Relation to prior work.}
-The finite-time learning objective differs from classical Boltzmann machine training, which requires equilibrium sampling.
-Our approach shares motivation with equilibrium propagation but provides explicit hardware primitives rather than algorithmic recipes.
-Unlike inference-only thermodynamic accelerators (Ising machines, p-bit arrays for optimization), the Criticality Engine closes the training loop on-chip.
-
 \textbf{Limitations.}
-This paper presents an architecture; numerical validation on specific tasks remains future work.
 Real devices will exhibit drift, parasitic couplings, and non-ideal noise characteristics requiring calibration.
-The finite-time objective may not align with equilibrium properties for all tasks.
+The current MNIST demonstration uses 14$\times$14 downsampled images; scaling to larger state spaces requires investigation.
+Generation quality with couplings alone (without biases) produces structured but noisy outputs, suggesting that first-order and second-order structure play complementary roles.
 
 \textbf{Future directions.}
 Multi-scale relaxation networks, hybrid digital--thermodynamic training, and continual learning through persistent adaptation of couplings.
@@ -687,18 +745,6 @@ The bistability is essential for representing discrete structure.
 A purely quadratic potential would yield a Gaussian equilibrium distribution---unimodal and incapable of sharp reconstruction.
 Instead, the $\varphi^4$ nonlinearity enables each node to ``snap'' toward one of two states, producing high-contrast outputs where pixels settle into their stable attractors rather than averaging toward gray.
 
-\subsection{Denoising via Relaxation}
-Using the biases learned via trajectory estimation (Section~\ref{sec:recognition}), we can denoise corrupted digits through Langevin relaxation under the $\varphi^4$+bias potential.
-Starting from noisy inputs $\tilde x = x_{\rm data} + \epsilon$, Langevin dynamics follows the learned drift $-\nabla V_c$ back toward the data manifold for class $c$.
-Figure~\ref{fig:trajectory} shows a representative relaxation trajectory: starting from random noise, structure emerges as pixels settle into their bistable attractors shaped by the learned bias.
-
-\begin{figure*}[t]
-\centering
-\includegraphics[width=0.9\textwidth]{paper_figures/trajectory_fast_learned.png}
-\caption{Relaxation trajectory under the $\varphi^4$+bias potential with biases learned via trajectory estimation. Starting from random noise (t=0), the system converges toward the digit-3 attractor. Structure emerges by t=20--40 as the learned bias $\mathbf{b}_3$ guides pixels toward the digit template while the $\varphi^4$ potential pushes them into bistable wells.}
-\label{fig:trajectory}
-\end{figure*}
-
 \subsection{Multi-Modal Structure Requires Class-Conditional Parameters}
 With a single shared potential, unconditional generation from random initialization produces scattered noise rather than digit patterns.
 From the constraint satisfaction perspective of Section~\ref{sec:constraint}, this is not a failure of learning but a geometric fact: \emph{a single constraint surface cannot represent multiple modes}.
@@ -731,9 +777,6 @@ Each class has its own constraint surface, and the biases are learned independen
 
 \textbf{Attractor visualization:} Starting from uniform gray ($x_i = 0$) and evolving under $V_c$, pixels organize into the pattern for digit $c$.
 The learned biases $\mathbf{b}_c$ resemble digit templates---analogous to Hopfield stored patterns---and conditional generation produces recognizable digits.
-The fast convergence demonstrated in Figure~\ref{fig:trajectory} applies equally when starting from gray: structure emerges in $\sim$10 steps and stabilizes by $\sim$20 steps.
-
-\textbf{Wrong-label test:} Denoising a digit with an incorrect class label reshapes it toward the wrong class, confirming that labels act as latent mode selectors that activate distinct attractor basins.
 
 \subsection{Recognition and the Complete Pipeline}
 
@@ -758,7 +801,7 @@ This is precisely \emph{Hopfield associative memory}: the biases $\mathbf{b}_c$ 
 
 In principle, this unifies classification and generation in a single energy-based framework.
 Initial experiments with denoising score matching achieved only $\sim$37\% classification accuracy---better than the 10\% random baseline, but far from state-of-the-art.
-However, a key insight dramatically improves this result: \textbf{trajectory-based estimation with data-dependent diffusion achieves 76\% test accuracy in a single epoch}.
+However, a key insight improves this dramatically: \textbf{coupling learning with thermal pixel exchanges achieves 78.8\% test accuracy on within-class centered data}---where nearest-centroid classification achieves only 9.4\%.
 
 \textbf{Why trajectory estimation outperforms score matching.}
 Score matching learns to denoise by matching the local score $\nabla \log p(\mathbf{x})$ to a denoising direction.
@@ -768,49 +811,81 @@ The potentials learned via score matching overlap significantly; some classes (e
 Trajectory estimation differs fundamentally: it observes how pixel values \emph{evolve} under a data-dependent diffusion process, then uses the analytical gradient formulas (\ref{eq:J_grad})--(\ref{eq:b_grad}) to estimate parameters.
 The key is that the diffusion must be \emph{data-dependent}: different digit classes produce different diffusion signatures because their spatial intensity patterns differ.
 
-\textbf{Conservative pixel diffusion.}
-We implement a diffusion process where pixels (treated as particles) exchange intensity with neighbors while conserving total mass:
+\textbf{Thermal pixel exchanges (Kawasaki dynamics).}
+We implement a mass-conserving stochastic process where pixels \emph{exchange} intensity rather than receiving independent noise.
+At each timestep, we randomly select pixel pairs $(i,j)$ and transfer a small amount of intensity from one to the other:
 \begin{equation}
-\Delta x_i = \alpha \sum_{j \in \text{neighbors}} (x_j - x_i) + \text{(zero-sum noise)}.
+x_i \to x_i - \delta, \quad x_j \to x_j + \delta, \quad \text{where } \delta \sim \mathcal{N}(0, \sigma^2).
 \end{equation}
-A digit ``3'' diffuses differently than a digit ``7'' because their spatial gradients differ.
-The residual between observed diffusion and model-predicted drift (from the $\varphi^4$ potential) captures this class-specific structure.
+This conserves total mass $\sum_i x_i$ exactly, mimicking Kawasaki spin-exchange dynamics in statistical physics.
+The key insight is that correlated pixels---those that tend to have similar values within a class---will show characteristic exchange patterns.
+If pixels $i$ and $j$ are both typically bright (or both typically dark) in digit ``3'', exchanging intensity between them produces smaller net changes than exchanging between a bright and dark pixel.
+These exchange statistics encode \emph{second-order structure}---the correlations $\langle x_i x_j \rangle$ rather than just the means $\langle x_i \rangle$.
 
-\textbf{One-epoch learning.}
-The gradient estimator (\ref{eq:b_grad}) accumulates residuals:
+\textbf{Bias-only learning: A baseline (and its limitations).}
+If we learn only the biases $\mathbf{b}_c$ while keeping couplings $J_{ij} = 0$, the gradient estimator (\ref{eq:b_grad}) reduces to:
 \begin{equation}
-\Delta b_{c,i} \propto -\frac{1}{N_c} \sum_{\text{samples of class } c} \text{residual}_i = -\langle \text{diffusion signature} \rangle_c.
+\Delta b_{c,i} \propto -\frac{1}{N_c} \sum_{\text{samples of class } c} x_i = -\langle x_i \rangle_c.
 \end{equation}
-After one pass through the data, each $\mathbf{b}_c$ becomes a \emph{template} of the average diffusion signature for class $c$---which is essentially the average digit shape.
-Classification then reduces to template matching: $c^* = \arg\min_c V_c(\mathbf{x}) = \arg\min_c (\text{const} + \mathbf{b}_c \cdot \mathbf{x})$.
+This means the learned bias is simply the \emph{negative class mean}---the average digit template.
+Classification reduces to nearest-centroid matching: $c^* = \arg\min_c \|\mathbf{x} - \boldsymbol{\mu}_c\|^2$, which achieves $\sim$82\% accuracy on raw MNIST.
+While this validates the gradient formula, it is not learning anything beyond first-order statistics (means).
+
+\textbf{The critical test: within-class centering.}
+To verify that coupling learning captures \emph{genuine second-order structure}, we apply within-class centering: for each class $c$, we subtract the class mean $\boldsymbol{\mu}_c$ from all training and test samples of that class.
+After centering, all class centroids are identically zero, and nearest-centroid classification achieves only $\sim$9.4\%---equivalent to random guessing.
+Any classifier that succeeds on centered data must be using correlational structure, not templates.
+
+\textbf{Coupling learning on centered data.}
+Using the gradient formula (\ref{eq:J_grad}) with thermal pixel exchanges, we learn symmetric couplings $J_{ij}$ on the centered data.
+The coupling gradient captures how exchange residuals at pixel $i$ correlate with values at pixel $j$:
+\begin{equation}
+\Delta J_{ij} \propto -\frac{1}{2k_{\rm B}T}\left( \text{residual}_i \cdot x_j + \text{residual}_j \cdot x_i \right).
+\end{equation}
 
 \textbf{Experimental results.}
 \begin{center}
-\begin{tabular}{lcc}
+\begin{tabular}{lc}
 \toprule
-\textbf{Epoch} & $\|\mathbf{b}\|$ & \textbf{Accuracy} \\
+\textbf{Method} & \textbf{Test Accuracy} \\
 \midrule
-Before training & 0.00 & 10.0\% (random) \\
-After 1 epoch & 0.06 & 79.4\% \\
-After 100 epochs & 6.43 & 80.2\% \\
+Nearest Centroid (raw data) & 81.9\% \\
+Nearest Centroid (centered data) & 9.4\% (random) \\
+Coupling learning $J_{ij}$ (centered data) & \textbf{78.8\%} \\
 \bottomrule
 \end{tabular}
 \end{center}
-The jump from 10\% to 79\% in a single epoch demonstrates that trajectory estimation extracts class structure extremely efficiently.
-Additional epochs provide marginal improvement because the templates are already well-formed.
+The key result: on data where first-order methods completely fail (9.4\%), coupling learning achieves 78.8\% accuracy.
+This proves the method extracts genuine second-order correlational structure from the exchange dynamics.
 
-Figure~\ref{fig:biases} shows the learned biases $-\mathbf{b}_c$, which visibly resemble the digit templates for each class.
+Figure~\ref{fig:thermalization} shows the thermal pixel exchange process: a digit thermalizes while conserving total mass, with pixels gradually mixing while maintaining the global intensity.
+Figure~\ref{fig:couplings} shows the learned coupling matrices $J_{ij}$ for each class, visualized as the coupling strength from the center pixel to all other pixels.
+Unlike bias templates, these show local correlation patterns rather than digit shapes---confirming that couplings encode second-order structure.
 
 \begin{figure*}[t]
 \centering
-\includegraphics[width=0.9\textwidth]{paper_figures/learned_biases.png}
-\caption{Learned class biases $-\mathbf{b}_c$ via trajectory estimation. Each panel shows the bias template for one digit class (0--9). Red (positive) values attract pixels toward white; blue (negative) toward black. The templates visibly encode digit shapes, explaining the 76\% test accuracy: recognition reduces to template matching $c^* = \arg\min_c V_c(\mathbf{x})$.}
-\label{fig:biases}
+\includegraphics[width=0.9\textwidth]{paper_figures/thermalization_demo.png}
+\caption{Thermal pixel exchange dynamics. A digit ``3'' thermalizes over 100 timesteps while conserving total mass (7.13 $\to$ 7.13). Structure gradually dissolves as pixels exchange intensity, but the exchange statistics encode class-specific correlations that the coupling learning extracts.}
+\label{fig:thermalization}
+\end{figure*}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.9\textwidth]{paper_figures/exchange_learned_J_spatial.png}
+\caption{Learned couplings $J_{ij}$ for each digit class, showing the coupling strength from the center pixel to all other pixels. Blue indicates positive coupling (correlated pixels), red indicates negative (anti-correlated). Unlike bias templates which resemble digit shapes, the coupling patterns show local correlation structure---confirming that the 78.8\% accuracy on centered data comes from genuine second-order learning, not disguised template matching.}
+\label{fig:couplings}
+\end{figure*}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.9\textwidth]{paper_figures/exchange_learning_curves.png}
+\caption{Learning curves for coupling-based classification. Left: Train and test accuracy over 100 epochs, showing rapid convergence to $\sim$78.8\% test accuracy. The gap between train ($\sim$86\%) and test accuracy suggests room for regularization. Right: Total coupling norm $\|J\|$ grows linearly with training, indicating the optimizer continues to strengthen discriminative couplings.}
+\label{fig:learning_curves}
 \end{figure*}
 
 \subsection{Contrastive Learning: Further Separating Constraint Surfaces}
 
-Trajectory estimation already achieves 76\% test accuracy by learning class templates from diffusion signatures.
+Coupling learning achieves 78.8\% test accuracy on centered data by learning correlational structure from exchange dynamics.
 However, this is still a \emph{generative} objective---the gradient estimator (\ref{eq:b_grad}) projects each $\mathbf{b}_c$ onto the constraint surface $\mathcal{C}_c$ where class-$c$ trajectories are maximally likely, but doesn't explicitly ensure that constraint surfaces for different classes are well-separated.
 For applications requiring higher accuracy, a \emph{discriminative} term can push constraint surfaces apart.
 
@@ -886,8 +961,8 @@ This provides a principled way to jointly sample configurations and class labels
 The learned class biases $-\mathbf{b}_c$ function as attractor templates analogous to Hopfield stored patterns, resembling smoothed digit templates where positive (negative) bias values attract pixels toward white (black).
 The contrastive signal $-b_c + \frac{1}{K-1}\sum_{j\neq c} b_j$ reveals what makes each digit \emph{unique}---the discriminative features that separate it from other classes.
 
-With trajectory estimation achieving 76\% test accuracy, the system already provides strong classification performance.
-Contrastive fine-tuning may further improve accuracy toward state-of-the-art levels, but the one-epoch trajectory result demonstrates that the physics-based approach is remarkably efficient at extracting class structure.
+With coupling learning achieving 78.8\% test accuracy on centered data (where first-order methods fail entirely), the system demonstrates genuine second-order learning.
+Contrastive fine-tuning may further improve accuracy, but the coupling result proves that the physics-based approach extracts correlational structure beyond simple templates.
 
 \subsection{Hardware Interpretation}
 The class-conditional structure maps directly to hardware: the reconfiguration fabric stores $K$ bias banks $\{\mathbf{b}_0, \ldots, \mathbf{b}_{K-1}\}$.
@@ -903,5 +978,94 @@ The trajectory probability $P[\mathbf{x}(t)] \propto \exp(-S[\mathbf{x}])$ with 
 This correspondence illuminates why learning at criticality is efficient: operating p-bits at threshold corresponds to the critical point of the $(d{+}1)$-dimensional theory, where temporal correlations become long-range.
 The ``strong coupling in time'' allows information to propagate efficiently across the time dimension, meaning that each trajectory strongly constrains model parameters.
 This is the physical origin of the rapid convergence observed in Figure~\ref{fig:convergence}---criticality maximizes the information content per trajectory, and the constraint surface becomes maximally informative.
+
+\begin{thebibliography}{99}
+
+\bibitem{hinton1985boltzmann}
+D.~H. Ackley, G.~E. Hinton, and T.~J. Sejnowski,
+``A learning algorithm for Boltzmann machines,''
+\emph{Cognitive Science}, vol.~9, no.~1, pp.~147--169, 1985.
+
+\bibitem{smolensky1986rbm}
+P.~Smolensky,
+``Information processing in dynamical systems: Foundations of harmony theory,''
+in \emph{Parallel Distributed Processing}, vol.~1, ch.~6, pp.~194--281, MIT Press, 1986.
+
+\bibitem{hinton2002cd}
+G.~E. Hinton,
+``Training products of experts by minimizing contrastive divergence,''
+\emph{Neural Computation}, vol.~14, no.~8, pp.~1771--1800, 2002.
+
+\bibitem{scellier2017ep}
+B.~Scellier and Y.~Bengio,
+``Equilibrium propagation: Bridging the gap between energy-based models and backpropagation,''
+\emph{Frontiers in Computational Neuroscience}, vol.~11, p.~24, 2017.
+
+\bibitem{wanjura2025quantumep}
+C.~C. Wanjura, F.~Marquardt, \emph{et al.},
+``Quantum equilibrium propagation for efficient training of quantum systems based on Onsager reciprocity,''
+\emph{Nature Communications}, vol.~16, p.~6595, 2025.
+
+\bibitem{onsager1953fluctuations}
+L.~Onsager and S.~Machlup,
+``Fluctuations and irreversible processes,''
+\emph{Physical Review}, vol.~91, no.~6, pp.~1505--1512, 1953.
+
+\bibitem{camsari2017pbit}
+K.~Y. Camsari, R.~Faria, B.~M. Sutton, and S.~Datta,
+``Stochastic p-bits for invertible logic,''
+\emph{Physical Review X}, vol.~7, no.~3, p.~031014, 2017.
+
+\bibitem{borders2019pbit}
+W.~A. Borders, A.~Z. Pervaiz, S.~Fukami, K.~Y. Camsari, H.~Ohno, and S.~Datta,
+``Integer factorization using stochastic magnetic tunnel junctions,''
+\emph{Nature}, vol.~573, pp.~390--393, 2019.
+
+\bibitem{aifer2024thermodynamic}
+M.~Aifer, K.~Deng, G.~Kol, F.~Sheldon, and P.~Bhattacharya,
+``Thermodynamic computing system for AI applications,''
+\emph{Nature Communications}, vol.~16, p.~3474, 2025.
+
+\bibitem{extropic2024tsu}
+G.~Verdon, T.~McCourt, E.~Genin, \emph{et al.},
+``Thermodynamic computing: From zero to one,''
+Extropic Technical Report, 2024.
+
+\bibitem{whitelam2025training}
+S.~Whitelam,
+``Training thermodynamic computers by gradient descent,''
+arXiv:2509.15324, 2025.
+
+\bibitem{whitelam2025generative}
+S.~Whitelam,
+``Generative thermodynamic computing,''
+arXiv:2506.15121, 2025.
+
+\bibitem{vincent2011dsm}
+P.~Vincent,
+``A connection between score matching and denoising autoencoders,''
+\emph{Neural Computation}, vol.~23, no.~7, pp.~1661--1674, 2011.
+
+\bibitem{song2019score}
+Y.~Song and S.~Ermon,
+``Generative modeling by estimating gradients of the data distribution,''
+\emph{Advances in Neural Information Processing Systems}, vol.~32, 2019.
+
+\bibitem{goldt2017thermodynamics}
+S.~Goldt and U.~Seifert,
+``Stochastic thermodynamics of learning,''
+\emph{Physical Review Letters}, vol.~118, no.~1, p.~010601, 2017.
+
+\bibitem{hopfield1982neural}
+J.~J. Hopfield,
+``Neural networks and physical systems with emergent collective computational abilities,''
+\emph{Proceedings of the National Academy of Sciences}, vol.~79, no.~8, pp.~2554--2558, 1982.
+
+\bibitem{lecun2006ebm}
+Y.~LeCun, S.~Chopra, R.~Hadsell, M.~Ranzato, and F.~Huang,
+``A tutorial on energy-based learning,''
+in \emph{Predicting Structured Data}, MIT Press, 2006.
+
+\end{thebibliography}
 
 \end{document}
