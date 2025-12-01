@@ -718,9 +718,9 @@ The Criticality Engine exemplifies a new paradigm where training and inference a
 The architecture is compatible with existing CMOS processes and benefits from advances in stochastic devices such as nanomagnets.
 
 \textbf{Limitations.}
-This paper presents an architecture; numerical validation on specific tasks remains future work.
 Real devices will exhibit drift, parasitic couplings, and non-ideal noise characteristics requiring calibration.
-The finite-time objective may not align with equilibrium properties for all tasks.
+The current MNIST demonstration uses 14$\times$14 downsampled images; scaling to larger state spaces requires investigation.
+Generation quality with couplings alone (without biases) produces structured but noisy outputs, suggesting that first-order and second-order structure play complementary roles.
 
 \textbf{Future directions.}
 Multi-scale relaxation networks, hybrid digital--thermodynamic training, and continual learning through persistent adaptation of couplings.
@@ -1049,7 +1049,6 @@ arXiv:2509.15324, 2025.
 S.~Whitelam,
 ``Generative thermodynamic computing,''
 arXiv:2506.15121, 2025.
-
 \bibitem{vincent2011dsm}
 P.~Vincent,
 ``A connection between score matching and denoising autoencoders,''
