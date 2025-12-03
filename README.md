@@ -2,6 +2,10 @@
 
 **On-chip learning for thermodynamic computers via the Onsager-Machlup action.**
 
+![Thermal Dynamics Visualizer](thermal-demo.gif)
+
+*Particles relaxing to equilibrium digit configurations via Langevin dynamics. Increase temperature → decoherence. Lower temperature → pattern recovery.*
+
 ---
 
 ## What This Is
@@ -55,9 +59,9 @@ uv run python learn_couplings.py
 
 ```
 ├── learn_couplings.py          # Simulation of thermal dynamics + learning
+├── parameter_recovery.py       # Validates gradient formulas recover true parameters
+├── thermal-viz/                # Interactive Next.js visualizer (run: npm run dev)
 ├── morisse-whitelam.tex/pdf    # Full paper with theory + hardware design
-├── HARDWARE_COMPARISON.md      # Comparison with Equilibrium Propagation
-├── PLAN.md                     # Research roadmap
 └── paper_figures/              # Generated visualizations
 ```
 

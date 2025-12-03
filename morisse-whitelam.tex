@@ -820,8 +820,27 @@ The potentials learned via score matching overlap significantly; some classes (e
 Trajectory estimation differs fundamentally: it observes how pixel values \emph{evolve} under a data-dependent diffusion process, then uses the analytical gradient formulas (\ref{eq:J_grad})--(\ref{eq:b_grad}) to estimate parameters.
 The key is that the diffusion must be \emph{data-dependent}: different digit classes produce different diffusion signatures because their spatial intensity patterns differ.
 
+\textbf{Denoising as trajectory observation.}
+A key insight connects score matching to trajectory-based learning: \emph{denoising IS trajectory observation}.
+When we add noise to an MNIST image $\mathbf{x}$ to obtain a corrupted version $\mathbf{y} = \mathbf{x} + \boldsymbol{\epsilon}$, the denoising direction $\mathbf{x} - \mathbf{y} = -\boldsymbol{\epsilon}$ is exactly the trajectory step we would observe if the system relaxed from $\mathbf{y}$ back toward equilibrium at $\mathbf{x}$.
+
+For a quadratic energy $V(\mathbf{x}) = \frac{1}{2}\mathbf{x}^\top J \mathbf{x}$, the predicted drift is $-\nabla V = -J\mathbf{x}$.
+At the noisy point $\mathbf{y}$, the model score is $-J\mathbf{y}$.
+Score matching trains $J$ so that this predicted direction matches the true denoising direction $-\boldsymbol{\epsilon}/\sigma^2$.
+This is mathematically equivalent to observing a single Langevin step from $\mathbf{y}$ toward $\mathbf{x}$ and applying the gradient formula (\ref{eq:J_grad}).
+
+Figure~\ref{fig:mnist_thermalization} shows this process: MNIST digits thermalize under Langevin dynamics, with pixel intensities fluctuating around their equilibrium values.
+The trajectories of this thermalization---the sequence of displacements $\Delta\mathbf{x}^k$---encode information about the energy landscape that the gradient formulas extract.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{paper_figures/mnist_thermalization.png}
+\caption{MNIST digits thermalizing under Langevin dynamics. Each row shows a different digit (0--9) evolving from equilibrium ($t=0$) through increasing thermal fluctuation. The trajectory of displacements encodes information about the energy landscape: pixels that co-vary under thermal noise are coupled in the learned $J$ matrix. This visualization demonstrates the physical interpretation of trajectory-based learning: we observe how the system fluctuates and extract parameters from the statistics of these fluctuations.}
+\label{fig:mnist_thermalization}
+\end{figure}
+
 \textbf{Thermal pixel exchanges (Kawasaki dynamics).}
-We implement a mass-conserving stochastic process where pixels \emph{exchange} intensity rather than receiving independent noise.
+An alternative formulation uses mass-conserving dynamics where pixels \emph{exchange} intensity rather than receiving independent noise.
 At each timestep, we randomly select pixel pairs $(i,j)$ and transfer a small amount of intensity from one to the other:
 \begin{equation}
 x_i \to x_i - \delta, \quad x_j \to x_j + \delta, \quad \text{where } \delta \sim \mathcal{N}(0, \sigma^2).
